@@ -164,21 +164,21 @@ Agent 的大脑，负责调度与逻辑流。
 **`class IrisAgent`**
 
 * **System Prompt 设计**：
-    1. **明确身份**：电脑桌面自动化助手。
-    2. **Reasoning First**：全局图用于大概定位，局部图用于确认细节。要求模型先描述图片(因为这些 reasoning 会存入记忆，所以详细具体的图片描述很重要)。
-    3. **Verify**：只有当局部图中鼠标通过 "move" 准确对准了目标，才能执行 "click" 等操纵，如果不对则需要进一步调整位置。
-    4. **Action**：在 Reasoning 后，输出 `<action>...</action>`。
+    * **明确身份**：电脑桌面自动化助手。
+    * **Reasoning First**：全局图用于大概定位，局部图用于确认细节。要求模型先描述图片(因为这些 reasoning 会存入记忆，所以详细具体的图片描述很重要)。
+    * **Verify**：只有当局部图中鼠标通过 "move" 准确对准了目标，才能执行 "click" 等操纵，如果不对则需要进一步调整位置。
+    * **Action**：在 Reasoning 后，输出 `<action>...</action>`。
 
 * **`step()` 主循环方法**：
-    1. **感知**：调用 `VisionPerceptor.capture_state()` 获取图片(包括全局试图和局部视图)。
-    2. **构建**：调用 `HierarchicalMemory.get_full_context()` 获取完整的 messages。
-    3. **推理(Stream)**：请求 LLM API，开启流式模式。
-    4. **流式解析(Parser)**：
+    * **感知**：调用 `VisionPerceptor.capture_state()` 获取图片(包括全局试图和局部视图)。
+    * **构建**：调用 `HierarchicalMemory.get_full_context()` 获取完整的 messages。
+    * **推理(Stream)**：请求 LLM API，开启流式模式。
+    * **流式解析(Parser)**：
         * 初始化一个 response 字符串。
         * 逐块接收新的字符串，追加到 response 后。
         * 同时检测到 `<action>` 和 `</action>` 在 response 中后，进行正则匹配 `<action>(.*?)</action>`。
         * **中断机制**：一旦匹配成功，立即断开 LLM 连接，节省时间和 Token。
-    5. **Action 解析与修复**：
+    * **Action 解析与修复**：
         * 提取标签内的字符串。
         * 使用 `repair_json` 尝试解析 JSON。示例：
             ```python
@@ -186,8 +186,8 @@ Agent 的大脑，负责调度与逻辑流。
             act_dict = eval(repair_json(act_str))
             ```
         * 如果解析失败，不需要执行动作，直接将错误信息作为执行结果 Feedback 并让 Agent 在下一步重试。
-    6. **执行**：调用 `ActionExecutor.execute()`。
-    7. **记忆**：将 Reasoning+Action、执行结果 Feedback 存入 Memory。
+    * **执行**：调用 `ActionExecutor.execute()`。
+    * **记忆**：将 Reasoning+Action、执行结果 Feedback 存入 Memory。
 
 ---
 
