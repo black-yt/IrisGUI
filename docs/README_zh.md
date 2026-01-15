@@ -23,8 +23,6 @@ Iris/
 └── requirements.txt      # [依赖] pyautogui, pillow, json_repair, openai等
 ```
 
----
-
 ### 3. 详细模块规范
 
 #### A. `config.py`(配置中心)
@@ -47,6 +45,7 @@ Iris/
     * `MAX_SHORT_MEMORY`：10 (最大的短记忆数量)
     * `COMPRESSION_RATIO`：5 (每5条消息压缩为1条)
 
+---
 
 #### B. `tools.py`(感知与执行)
 
@@ -87,16 +86,16 @@ Iris/
         * **`double_click` (双击)**
             * **参数**: 无 (默认左键)。
             * **逻辑**: 快速连续点击两次。用于打开文件或选中单词。
-        * **`drag` (拖拽 - 新增核心功能)**
+        * **`drag` (拖拽)**
             * **参数**: `to_x` (int), `to_y` (int): 终点坐标。`from_x` (int, 可选), `from_y` (int, 可选): 起点坐标。如不填，默认从当前鼠标位置开始。`duration` (float, 可选, 默认 1.0): 拖拽过程耗时。
             * **逻辑**: 如果指定了 `from`，先 `move` 到起点。按下鼠标左键 (`mouseDown`)。等待 0.1s (模拟人类抓取确认)。平滑移动到 `to_x, to_y` (`moveTo` with duration)。松开鼠标左键 (`mouseUp`)。
             * **场景**: 滑块验证码、移动文件、拖动窗口、在地图应用中漫游。
             * **示例**: `<action>{"type": "drag", "from_x": 100, "from_y": 100, "to_x": 400, "to_y": 100}</action>`
-        * **`hover` (悬停 - 新增)**
+        * **`hover` (悬停)**
             * **参数**: `duration` (float, 可选, 默认 1.0)。
             * **逻辑**: 确保鼠标移动到目标后，**保持静止**指定时间。
             * **场景**: 触发 Tooltip 提示框、触发下拉菜单 (Drop-down Menu) 展开。如果不显式定义 Hover，Agent 可能会点击得太快导致菜单还没出来就操作结束。
-        * **`scroll` (滚动 - 增强)**
+        * **`scroll` (滚动)**
             * **参数**: `direction`: "up" | "down" | "left" | "right" (**新增横向滚动**)。`amount`: "line" | "half" | "page"。
             * **逻辑**: 除了垂直滚动，增加 `hscroll` 支持（Excel 表格、看板工具必备）。
 
@@ -105,12 +104,11 @@ Iris/
             * **参数**: `text` (string): 要输入的文本。`submit` (bool, 可选, 默认 False): 输入完成后是否自动按 Enter 键。
             * **逻辑**: 模拟键盘敲击。建议字符间增加 0.05s~0.1s 的随机微延迟，防止被某些网页判定为机器人。如果 `submit` 为真，打字结束后触发 `press("enter")`。
             * **示例**: `<action>{"type": "type", "text": "Hello World", "submit": true}</action>`
-        * **`hotkey` (组合键 - 替代原 key)**
+        * **`hotkey` (组合键)**
             * **参数**: `keys` (list of strings)
             * **逻辑**: 接收按键列表。
             * **支持键名**: "enter", "esc", "backspace", "tab", "space", "up", "down", "left", "right", "f1"-"f12", "home", "end", "pageup", "pagedown".
             * **示例**: `<action>{"type": "hotkey", "keys": ["ctrl", "shift", "esc"]}</action>`
-
 
     * **系统/辅助** (System/Meta)
         * **`wait` (等待)**
@@ -122,6 +120,7 @@ Iris/
     * 执行成功返回字符串：`"Action move (100, 200) executed."`
     * 执行失败返回错误：`"Error：Coordinate (2000, 500) out of screen bounds."`
 
+---
 
 #### C. `memory.py`(记忆管理)
 
@@ -156,6 +155,7 @@ Iris/
         * 将 query 拼接到最后一条 message(最后一条是 user message)后面，并加上images。
     * 返回的 messages 中的 role 应该是 system prompt，user，assistant，...，user。并且只有最后的 user message 中包含图片(全局试图+局部试图)。
 
+---
 
 #### D. `agent.py`(推理与控制)
 
@@ -189,6 +189,7 @@ Agent 的大脑，负责调度与逻辑流。
     6. **执行**：调用 `ActionExecutor.execute()`。
     7. **记忆**：将 Reasoning+Action、执行结果 Feedback 存入 Memory。
 
+---
 
 #### E. `main.py`(入口)
 
