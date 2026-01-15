@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import scrolledtext
 import threading
 import time
-import sys
 import os
 from pynput import keyboard
 from scripts.agent import IrisAgent
