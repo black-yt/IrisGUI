@@ -4,13 +4,13 @@
 
 ---
 
-### 1. Iris 架构概览
+## 1. Iris 架构概览
 
 * **核心逻辑**：ReAct(Reasoning + Acting)
 * **交互模式**：观察(全局+局部)-> 思考(流式推理)-> 行动(执行并反馈)-> 记忆(压缩与更新)
 * **数据协议**：输出格式为 `Reasoning + <action>JSON</action>`，支持流式中断。
 
-### 2. 文件目录结构
+## 2. 文件目录结构
 
 ```text
 Iris/
@@ -23,9 +23,9 @@ Iris/
 └── requirements.txt      # [依赖] pyautogui, pillow, json_repair, openai等
 ```
 
-### 3. 详细模块规范
+## 3. 详细模块规范
 
-#### A. `config.py`(配置中心)
+### A. `config.py`(配置中心)
 
 定义 Agent 的运行参数，确保所有硬编码数值集中管理。
 
@@ -47,11 +47,11 @@ Iris/
 
 ---
 
-#### B. `tools.py`(感知与执行)
+### B. `tools.py`(感知与执行)
 
 该文件封装所有与操作系统交互的底层逻辑，是 Agent 与真实世界的接口。
 
-**1. `class VisionPerceptor`(视觉感知器)**
+#### **`class VisionPerceptor`(视觉感知器)**
 
 * **`capture_state()` 方法**：
     * 调用 `pyautogui` 获取当前屏幕原始截图。
@@ -68,7 +68,7 @@ Iris/
 
 * **Debug 存档**：若开启调试模式，将两张处理后的图片保存至 `debug/` 文件夹，文件名带时间戳。
 
-**2. `class ActionExecutor`(动作执行器)**
+#### **`class ActionExecutor`(动作执行器)**
 
 * **`execute(action_dict)` 方法**：接收解析后的字典，根据 `action_type` 字段分发操作。
 * **支持动作**：
@@ -122,11 +122,11 @@ Iris/
 
 ---
 
-#### C. `memory.py`(记忆管理)
+### C. `memory.py`(记忆管理)
 
 实现分层记忆与动态维护，核心在于解决 Token 爆炸问题。
 
-**`class HierarchicalMemory`**
+#### **`class HierarchicalMemory`**
 
 * **初始化**：
     * `fixed_layer`：列表，包含 System Prompt 和初始 User Task。
@@ -157,11 +157,11 @@ Iris/
 
 ---
 
-#### D. `agent.py`(推理与控制)
+### D. `agent.py`(推理与控制)
 
 Agent 的大脑，负责调度与逻辑流。
 
-**`class IrisAgent`**
+#### **`class IrisAgent`**
 
 * **System Prompt 设计**：
     * **明确身份**：电脑桌面自动化助手。
@@ -191,7 +191,7 @@ Agent 的大脑，负责调度与逻辑流。
 
 ---
 
-#### E. `main.py`(入口)
+### E. `main.py`(入口)
 
 负责生命周期管理。
 
