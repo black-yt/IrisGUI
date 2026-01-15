@@ -37,6 +37,7 @@ MAX_SHORT_MEMORY = int(os.getenv("MAX_SHORT_MEMORY", 10))    # 最大的短记�
 COMPRESSION_RATIO = int(os.getenv("COMPRESSION_RATIO", 5))    # 每5条消息压缩为1条
 
 if __name__ == "__main__":
+    # python -m scripts.config
     print("Testing config.py...")
     print(f"LLM_API_ENDPOINT: {LLM_API_ENDPOINT}")
     print(f"LLM_MODEL_NAME: {LLM_MODEL_NAME}")

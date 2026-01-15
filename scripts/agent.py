@@ -237,6 +237,7 @@ Reasoning...
         return feedback
 
 if __name__ == "__main__":
+    # python -m scripts.agent
     print("Testing IrisAgent...")
     try:
         # 简单的实例化测试

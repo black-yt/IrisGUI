@@ -168,6 +168,7 @@ Consolidate the following historical summaries into a single high-level overview
         return messages
 
 if __name__ == "__main__":
+    # python -m scripts.memory
     print("Testing HierarchicalMemory...")
     try:
         memory = HierarchicalMemory("System Prompt", "Initial Task")
