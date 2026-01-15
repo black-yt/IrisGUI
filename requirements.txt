@@ -1,0 +1,6 @@
+pyautogui
+pillow
+json_repair
+openai
+pynput
+python-dotenv
