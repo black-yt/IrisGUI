@@ -17,9 +17,9 @@ scripts/
 ├── main.py               # [入口] 程序启动、任务初始化、异常熔断
 ├── config.py             # [配置] 全局参数、模型密钥、视觉阈值
 ├── tools.py              # [躯体] 视觉感知(截图/画网格)、动作执行、系统工具
-├── memory.py             # [记忆] 三层记忆管理、历史去图化、上下文压缩
+├── memory.py             # [记忆] 三层记忆管理、上下文压缩
 ├── agent.py              # [大脑] 核心循环、Prompt构建、流式解析与修复
-├── debug/                # [调试] 自动存储带标记的截图和运行日志
+├── debug/                # [调试] 自动存储带标记的截图
 └── requirements.txt      # [依赖] pyautogui, pillow, json_repair, openai等
 ```
 
