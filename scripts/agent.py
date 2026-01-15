@@ -4,6 +4,7 @@ from json_repair import repair_json
 from openai import OpenAI
 from scripts.config import *
 from scripts.memory import HierarchicalMemory
+import pyautogui
 from scripts.tools import VisionPerceptor, ActionExecutor
 
 
@@ -142,11 +143,18 @@ Reasoning...
             post_capture_callback()
         
         # 2. 构建 Context
-        query = """## Current Step
+        try:
+            mouse_x, mouse_y = pyautogui.position()
+        except:
+            mouse_x, mouse_y = 0, 0
+            
+        query = f"""## Current Step
 1. Analyze the Global View to understand the overall screen layout.
 2. Analyze the Local View to verify the precise mouse position.
-3. Based on the task history and current visual state, determine the next action.
+3. Current Mouse Position: ({mouse_x}, {mouse_y})
+4. Based on the task history and current visual state, determine the next action.
 """
+        log(f"❓ Query: {query}")
         messages = self.memory.get_full_context(query, images=(global_image, local_image))
 
         # 3. 推理 (Stream)

@@ -10,22 +10,23 @@ class IrisGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Iris Agent")
-        self.root.geometry("600x400")
+        # 设置全屏
+        self.root.state('zoomed')
         
         # 任务输入
         self.task_label = tk.Label(self.root, text="Enter Task:")
         self.task_label.pack(pady=5)
         
-        self.task_entry = tk.Entry(self.root, width=50)
+        self.task_entry = tk.Entry(self.root, width=100)
         self.task_entry.pack(pady=5)
         
         # 运行按钮
         self.run_button = tk.Button(self.root, text="Run Iris", command=self.start_agent_thread)
         self.run_button.pack(pady=10)
         
-        # 日志显示
-        self.log_area = scrolledtext.ScrolledText(self.root, width=70, height=15)
-        self.log_area.pack(pady=10)
+        # 日志显示 - 增加高度和宽度以适应全屏
+        self.log_area = scrolledtext.ScrolledText(self.root, width=150, height=40)
+        self.log_area.pack(pady=10, fill=tk.BOTH, expand=True)
         
         self.agent = None
         self.running = False
@@ -90,6 +91,7 @@ class IrisGUI:
             def post_capture():
                 # 截图后恢复窗口
                 self.root.deiconify()
+                self.root.state('zoomed')
 
             while self.running:
                 # 执行一步，传入回调函数控制窗口显隐
@@ -112,6 +114,7 @@ class IrisGUI:
             self.running = False
             self.run_button.config(state=tk.NORMAL)
             self.root.deiconify()
+            self.root.state('zoomed')
 
     def start(self):
         self.root.mainloop()

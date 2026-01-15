@@ -29,7 +29,7 @@ class VisionPerceptor:
         # 绘制坐标文字
         # 尝试加载字体，如果失败使用默认字体
         try:
-            font = ImageFont.truetype("arial.ttf", 15)
+            font = ImageFont.truetype("arial.ttf", 20)
         except IOError:
             font = ImageFont.load_default()
             
@@ -53,6 +53,59 @@ class VisionPerceptor:
         draw.ellipse((x-r, y-r, x+r, y+r), outline=GRID_COLOR, width=MOUSE_WIDTH)
         draw.line((x-r, y, x+r, y), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
         draw.line((x, y-r, x, y+r), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
+        
+        # 在鼠标的标签下面标出左边（x,y）
+        try:
+            font = ImageFont.truetype("arial.ttf", 16)
+        except IOError:
+            font = ImageFont.load_default()
+            
+        text = f"({x},{y})"
+        
+        # 计算文本尺寸
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        
+        # 默认位置：鼠标下方居中
+        text_x = x - text_width // 2
+        text_y = y + r + 5
+        
+        # 边界检查与调整
+        img_width, img_height = image.size
+        
+        # 如果下方超出边界，则放在上方
+        if text_y + text_height > img_height:
+            text_y = y - r - 5 - text_height
+            
+        # 如果上方也超出（极少见，除非图片极小），则保持在边界内
+        if text_y < 0:
+            text_y = 0
+            
+        # 如果左边超出边界，则靠左对齐
+        if text_x < 0:
+            text_x = 0
+            
+        # 如果右边超出边界，则靠右对齐
+        if text_x + text_width > img_width:
+            text_x = img_width - text_width
+        
+        # 绘制背景框以提高可读性
+        padding = 2
+        draw.rectangle(
+            (text_x - padding, text_y - padding, text_x + text_width + padding, text_y + text_height + padding),
+            fill="white",
+            outline=GRID_COLOR
+        )
+        
+        # 绘制文本
+        draw.text(
+            (text_x, text_y),
+            text,
+            fill="red",
+            font=font
+        )
+        
         return image
 
     def capture_state(self):
