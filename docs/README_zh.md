@@ -126,7 +126,7 @@ Iris/
 
 实现分层记忆与动态维护，核心在于解决 Token 爆炸问题。
 
-#### **`class HierarchicalMemory`**
+#### **`class HierarchicalMemory`(层次记忆器)**
 
 * **初始化**：
     * `fixed_layer`：列表，包含 System Prompt 和初始 User Task。
@@ -161,7 +161,7 @@ Iris/
 
 Agent 的大脑，负责调度与逻辑流。
 
-#### **`class IrisAgent`**
+#### **`class IrisAgent`(核心智能体)**
 
 * **System Prompt 设计**：
     * **明确身份**：电脑桌面自动化助手。
