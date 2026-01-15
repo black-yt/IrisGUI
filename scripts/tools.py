@@ -36,12 +36,27 @@ class VisionPerceptor:
         for x in range(0, width, step):
             for y in range(0, height, step):
                 # 在交叉点绘制坐标 (x, y)
-                text = f"({x},{y})"
+                text = f"x={x}\ny={y}"
                 # 添加一点背景框以便看清文字
                 bbox = draw.textbbox((x, y), text, font=font)
-                draw.rectangle(bbox, fill="white")
+                
+                # 临时转为 RGBA 以支持半透明
+                if image.mode != 'RGBA':
+                    image = image.convert('RGBA')
+                    draw = ImageDraw.Draw(image)
+                
+                overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+                overlay_draw = ImageDraw.Draw(overlay)
+                overlay_draw.rectangle(bbox, fill=(255, 255, 255, 180))
+                image = Image.alpha_composite(image, overlay)
+                draw = ImageDraw.Draw(image)
+                
                 draw.text((x, y), text, fill="black", font=font)
                 
+        # 转回 RGB
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+            
         return image
 
     def _draw_mouse(self, image, x, y):
@@ -60,7 +75,7 @@ class VisionPerceptor:
         except IOError:
             font = ImageFont.load_default()
             
-        text = f"({x},{y})"
+        text = f"x={x}\ny={y}"
         
         # 计算文本尺寸
         bbox = draw.textbbox((0, 0), text, font=font)
@@ -91,12 +106,24 @@ class VisionPerceptor:
             text_x = img_width - text_width
         
         # 绘制背景框以提高可读性
+        # 使用半透明白色背景，无边框
         padding = 2
-        draw.rectangle(
+        
+        # 创建一个半透明图层
+        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        
+        # 绘制半透明白色矩形 (255, 255, 255, 180)
+        overlay_draw.rectangle(
             (text_x - padding, text_y - padding, text_x + text_width + padding, text_y + text_height + padding),
-            fill="white",
-            outline=GRID_COLOR
+            fill=(255, 255, 255, 180)
         )
+        
+        # 将半透明图层合并到原图
+        image = Image.alpha_composite(image.convert('RGBA'), overlay)
+        
+        # 重新获取 draw 对象（因为 image 变了）
+        draw = ImageDraw.Draw(image)
         
         # 绘制文本
         draw.text(
@@ -105,6 +132,9 @@ class VisionPerceptor:
             fill="red",
             font=font
         )
+        
+        # 转回 RGB
+        image = image.convert('RGB')
         
         return image
 
