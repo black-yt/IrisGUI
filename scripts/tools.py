@@ -197,3 +197,31 @@ class ActionExecutor:
 
         except Exception as e:
             return f"Error executing action {action_type}: {str(e)}"
+
+if __name__ == "__main__":
+    print("Testing tools.py...")
+    
+    # Test VisionPerceptor
+    try:
+        print("Testing VisionPerceptor...")
+        vision = VisionPerceptor()
+        global_img, local_img = vision.capture_state()
+        print(f"Capture successful. Global size: {global_img.size}, Local size: {local_img.size}")
+    except Exception as e:
+        print(f"VisionPerceptor test failed: {e}")
+
+    # Test ActionExecutor
+    try:
+        print("Testing ActionExecutor...")
+        executor = ActionExecutor()
+        # Test a safe action: wait
+        result = executor.execute({"type": "wait", "seconds": 0.5})
+        print(f"Wait action result: {result}")
+        
+        # Optional: Test mouse move (small movement to verify)
+        # current_x, current_y = pyautogui.position()
+        # result = executor.execute({"type": "move", "x": current_x, "y": current_y, "duration": 0.1})
+        # print(f"Move action result: {result}")
+        
+    except Exception as e:
+        print(f"ActionExecutor test failed: {e}")

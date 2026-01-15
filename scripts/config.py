@@ -34,3 +34,12 @@ DEBUG_MODE = os.getenv("DEBUG_MODE", "True").lower() == "true" # 是否保存截
 MAX_LONG_MEMORY = int(os.getenv("MAX_LONG_MEMORY", 10))     # 最大的长记忆数量
 MAX_SHORT_MEMORY = int(os.getenv("MAX_SHORT_MEMORY", 10))    # 最大的短记忆数量
 COMPRESSION_RATIO = int(os.getenv("COMPRESSION_RATIO", 5))    # 每5条消息压缩为1条
+
+if __name__ == "__main__":
+    print("Testing config.py...")
+    print(f"LLM_API_ENDPOINT: {LLM_API_ENDPOINT}")
+    print(f"LLM_MODEL_NAME: {LLM_MODEL_NAME}")
+    print(f"GRID_STEP: {GRID_STEP}")
+    print(f"CROP_SIZE: {CROP_SIZE}")
+    print(f"MAX_STEPS: {MAX_STEPS}")
+    print(f"DEBUG_MODE: {DEBUG_MODE}")

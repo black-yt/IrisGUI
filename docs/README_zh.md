@@ -151,7 +151,7 @@
         * System Prompt 的 messages role 是 system。
         * 模型的 Reasoning+Action 的 messages role 是 assistant。
         * 执行结果 Feedback 的 messages role 是 user。
-        * 将 query 拼接到最后一条 message(最后一条是 user message)后面，并加上images。
+        * 将 query 拼接到最后一条 message 后面，并加上images。
     * 返回的 messages 中的 role 应该是 system prompt，user，assistant，...，user。并且只有最后的 user message 中包含图片(全局试图+局部试图)。
 
 ---
