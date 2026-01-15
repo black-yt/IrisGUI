@@ -3,26 +3,20 @@ from tkinter import scrolledtext
 import threading
 import time
 import os
+import argparse
+import sys
 from pynput import keyboard
 from scripts.agent import IrisAgent
+from scripts.config import DEBUG_MODE
 
 class IrisGUI:
-    def __init__(self):
+    def __init__(self, task):
         self.root = tk.Tk()
-        self.root.title("Iris Agent")
+        self.root.title("Iris Agent (Debug Mode)")
         # 设置全屏
         self.root.state('zoomed')
         
-        # 任务输入
-        self.task_label = tk.Label(self.root, text="Enter Task:")
-        self.task_label.pack(pady=5)
-        
-        self.task_entry = tk.Entry(self.root, width=100)
-        self.task_entry.pack(pady=5)
-        
-        # 运行按钮
-        self.run_button = tk.Button(self.root, text="Run Iris", command=self.start_agent_thread)
-        self.run_button.pack(pady=10)
+        self.task = task
         
         # 日志显示 - 增加高度和宽度以适应全屏
         self.log_area = scrolledtext.ScrolledText(self.root, width=150, height=40)
@@ -36,6 +30,9 @@ class IrisGUI:
         # 监听 ESC 键
         self.listener = keyboard.Listener(on_press=self.on_key_press)
         self.listener.start()
+        
+        # 自动开始任务
+        self.root.after(100, self.start_agent_thread)
 
     def log(self, message):
         # 使用 after 方法在主线程中更新 UI
@@ -64,17 +61,11 @@ class IrisGUI:
     def start_agent_thread(self):
         if self.running:
             return
-        
-        task = self.task_entry.get()
-        if not task:
-            self.log("Please enter a task.")
-            return
             
         self.running = True
-        self.run_button.config(state=tk.DISABLED)
         
         # 在新线程中运行 Agent
-        thread = threading.Thread(target=self.run_agent, args=(task,))
+        thread = threading.Thread(target=self.run_agent, args=(self.task,))
         thread.daemon = True
         thread.start()
 
@@ -103,26 +94,75 @@ class IrisGUI:
                     self.running = False
                     break
                 
-                # 简单的停止条件示例（实际可能需要 Agent 自己决定何时结束）
-                # 这里我们只是无限循环直到手动停止或达到最大步数
-                
         except Exception as e:
             self.log(f"Error: {e}")
         finally:
             self.running = False
-            self.run_button.config(state=tk.NORMAL)
-            self.root.deiconify()
-            self.root.state('zoomed')
+            # 任务结束不自动退出，保留窗口查看日志
+            self.log("\nTask finished.")
 
     def start(self):
         self.root.mainloop()
 
-if __name__ == "__main__":
-    # 检查是否在无头环境中运行（例如 CI/CD 或某些服务器环境）
-    # 如果没有 DISPLAY 环境变量，Tkinter 会失败
-    if os.environ.get('DISPLAY', '') == '':
-        print('No display found. Using dummy display for testing if needed, or exiting.')
-        # 对于这个任务，我们假设有显示环境，或者用户会在有显示环境的地方运行
+def run_console_agent(task):
+    print(f"Starting task: {task}")
     
-    app = IrisGUI()
-    app.start()
+    running = True
+    esc_count = 0
+    last_esc_time = 0
+
+    def on_key_press(key):
+        nonlocal esc_count, last_esc_time, running
+        if key == keyboard.Key.esc:
+            current_time = time.time()
+            if current_time - last_esc_time < 1.0:
+                esc_count += 1
+            else:
+                esc_count = 1
+            
+            last_esc_time = current_time
+            
+            if esc_count >= 3:
+                print("\nEmergency Stop Triggered!")
+                running = False
+                os._exit(0)
+
+    listener = keyboard.Listener(on_press=on_key_press)
+    listener.start()
+
+    try:
+        # No pre/post callbacks needed for console mode as there is no window to hide
+        agent = IrisAgent(task)
+        
+        while running:
+            # agent.step already prints to stdout, so we don't need a log_callback that prints
+            feedback = agent.step()
+            
+            if "Max steps reached" in feedback:
+                running = False
+                break
+            
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        print("\nTask finished.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Iris Agent")
+    parser.add_argument("task", help="The task description")
+    
+    args = parser.parse_args()
+    
+    print("Waiting 5 seconds before starting task...")
+    time.sleep(5)
+
+    if DEBUG_MODE:
+        # 检查是否在无头环境中运行
+        if os.environ.get('DISPLAY', '') == '' and os.name != 'nt':
+            print('No display found. Cannot run in debug mode.')
+            sys.exit(1)
+            
+        app = IrisGUI(args.task)
+        app.start()
+    else:
+        run_console_agent(args.task)
