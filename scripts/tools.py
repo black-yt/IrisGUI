@@ -277,6 +277,10 @@ class ActionExecutor:
                 time.sleep(seconds)
                 return f"Action wait {seconds}s executed."
 
+            elif action_type == "final_answer":
+                text = action_dict.get("text", "")
+                return f"[Task Completed]: {text}"
+
             else:
                 result = f"Error: Unknown action type '{action_type}'."
 
@@ -313,11 +317,57 @@ if __name__ == "__main__":
         mock_map = {"G-00-00": (0, 0), "L-00-00": (1000, 800)}
         
         # Test move
+        print("Testing move...")
         result = executor.execute({"action_type": "move", "point_id": "L-00-00"}, mock_map)
+        print(result)
+
+        # Test click
+        print("Testing click...")
         result = executor.execute({'action_type': 'click', 'button': 'left', 'repeat': 1}, mock_map)
+        print(result)
+
+        # Test type (ASCII)
+        print("Testing type (ASCII)...")
         result = executor.execute({"action_type": "type", "text": "111", "submit": True}, mock_map)
+        print(result)
+
+        # Test type (Non-ASCII)
+        print("Testing type (Non-ASCII)...")
         result = executor.execute({"action_type": "type", "text": "徐望瀚"}, mock_map)
-        print(f"Move result: {result}")
+        print(result)
+
+        # Test drag (simulated)
+        print("Testing drag (simulated)...")
+        # 1. Move to start
+        executor.execute({"action_type": "move", "point_id": "G-00-00"}, mock_map)
+        # 2. Mouse down
+        result = executor.execute({"action_type": "mouse_down", "button": "left"}, mock_map)
+        print(result)
+        # 3. Move to end
+        executor.execute({"action_type": "move", "point_id": "L-00-00"}, mock_map)
+        # 4. Mouse up
+        result = executor.execute({"action_type": "mouse_up", "button": "left"}, mock_map)
+        print(result)
+
+        # Test scroll
+        print("Testing scroll...")
+        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "line"}, mock_map)
+        print(result)
+
+        # Test hotkey
+        print("Testing hotkey...")
+        result = executor.execute({"action_type": "hotkey", "keys": ["ctrl", "c"]}, mock_map)
+        print(result)
+
+        # Test wait
+        print("Testing wait...")
+        result = executor.execute({"action_type": "wait", "seconds": 1.0}, mock_map)
+        print(result)
+
+        # Test final_answer
+        print("Testing final_answer...")
+        result = executor.execute({"action_type": "final_answer", "text": "Test completed."}, mock_map)
+        print(result)
         
     except Exception as e:
         print(f"ActionExecutor test failed: {e}")

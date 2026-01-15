@@ -120,6 +120,12 @@ Reasoning...
         <action>
         {"action_type": "wait", "seconds": 2.5}
         </action>
+*   **final_answer**: Indicates that the task is fully completed and outputs the complete result.
+    *   *Params*: `text` (string)
+    *   *Example*: Task completed successfully.
+        <action>
+        {"action_type": "final_answer", "text": "Task completed successfully."}
+        </action>
 
 ## Constraints & Best Practices
 -   **One Action Per Step**: You may only output ONE action block per response.
@@ -138,7 +144,7 @@ Reasoning...
 
     def step(self, log_callback=None):
         if self.step_count >= MAX_STEPS:
-            return "🛑 Max steps reached. Stopping."
+            return "🛑 [Max Steps Reached]. Stopping."
 
         self.step_count += 1
         

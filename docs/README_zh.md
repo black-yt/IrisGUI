@@ -31,6 +31,7 @@
 * **模型参数**：LLM API Endpoint, API Key, Model Name(建议 gpt-5.1 等强视觉模型)。
 * **视觉参数**：
     * `GRID_STEP`：100 (全局网格线的间距，单位像素)。
+    * `LOCAL_GRID_STEP`：30 (局部细网格线的间距，单位像素)。
     * `CROP_SIZE`：500 (局部截图的宽高，单位像素)。
     * `GRID_COLOR`："red" (网格标记的颜色)。
     * `GRID_WIDTH`：1 (网格标记的线宽)。
@@ -38,7 +39,7 @@
     * `MOUSE_WIDTH`：5 (鼠标标记的线宽)。
 * **运行参数**：
     * `MAX_STEPS`：100 (单次任务最大步数防止死循环)。
-    * `DEBUG_MODE`：True/False (是否保存截图到本地)。
+    * `DEBUG_MODE`：True/False (True: 开启GUI调试窗口并保存截图；False: 仅在终端运行且不保存截图)。
 * **记忆参数**：
     * `MAX_LONG_MEMORY`：10 (最大的长记忆数量)
     * `MAX_SHORT_MEMORY`：10 (最大的短记忆数量)
@@ -73,10 +74,10 @@
 * **支持动作**：
     * **鼠标交互 (Mouse Interactions)**：模拟人类手部操作，重点在于**平滑性**和**状态完整性**。
         * **`move` (移动)**
-            * **参数**: `x` (int), `y` (int), `duration` (float, 可选, 默认 0.5)
-            * **逻辑**: 移动鼠标到指定坐标。
-            * **工程细节**: 使用 `pyautogui.moveTo(x, y, duration=0.5, tween=pyautogui.easeInOutQuad)`。使用 `easeInOutQuad` 模拟人手起步慢、中间快、结束慢的物理惯性。
-            * **示例**: `<action>{"type": "move", "x": 500, "y": 300}</action>`
+            * **参数**: `point_id` (string), `duration` (float, 可选, 默认 0.5)
+            * **逻辑**: 移动鼠标到指定网格点（全局 `G-xx-yy` 或局部 `L-xx-yy`）。
+            * **工程细节**: 解析 `point_id` 获取坐标，使用 `pyautogui.moveTo(x, y, duration=0.5, tween=pyautogui.easeInOutQuad)`。
+            * **示例**: `<action>{"action_type": "move", "point_id": "G-05-03"}</action>`
         * **`click` (点击)**
             * **参数**: `button` ("left" | "right" | "middle", 可选, 默认 "left"), `repeat` (int, 可选, 默认 1)。
             * **逻辑**: 在当前位置点击。
@@ -85,15 +86,12 @@
         * **`double_click` (双击)**
             * **参数**: 无 (默认左键)。
             * **逻辑**: 快速连续点击两次。用于打开文件或选中单词。
-        * **`drag` (拖拽)**
-            * **参数**: `to_x` (int), `to_y` (int): 终点坐标。`from_x` (int, 可选), `from_y` (int, 可选): 起点坐标。如不填，默认从当前鼠标位置开始。`duration` (float, 可选, 默认 1.0): 拖拽过程耗时。
-            * **逻辑**: 如果指定了 `from`，先 `move` 到起点。按下鼠标左键 (`mouseDown`)。等待 0.1s (模拟人类抓取确认)。平滑移动到 `to_x, to_y` (`moveTo` with duration)。松开鼠标左键 (`mouseUp`)。
-            * **场景**: 滑块验证码、移动文件、拖动窗口、在地图应用中漫游。
-            * **示例**: `<action>{"type": "drag", "from_x": 100, "from_y": 100, "to_x": 400, "to_y": 100}</action>`
-        * **`hover` (悬停)**
-            * **参数**: `duration` (float, 可选, 默认 1.0)。
-            * **逻辑**: 确保鼠标移动到目标后，**保持静止**指定时间。
-            * **场景**: 触发 Tooltip 提示框、触发下拉菜单 (Drop-down Menu) 展开。如果不显式定义 Hover，Agent 可能会点击得太快导致菜单还没出来就操作结束。
+        * **`mouse_down` (按下)**
+            * **参数**: `button` ("left" | "right" | "middle", 可选, 默认 "left")。
+            * **逻辑**: 按下鼠标按键但不松开。常用于拖拽操作的第一步。
+        * **`mouse_up` (松开)**
+            * **参数**: `button` ("left" | "right" | "middle", 可选, 默认 "left")。
+            * **逻辑**: 松开鼠标按键。常用于拖拽操作的最后一步。
         * **`scroll` (滚动)**
             * **参数**: `direction`: "up" | "down" | "left" | "right" (**新增横向滚动**)。`amount`: "line" | "half" | "page"。
             * **逻辑**: 除了垂直滚动，增加 `hscroll` 支持（Excel 表格、看板工具必备）。
@@ -101,7 +99,7 @@
     * **键盘交互 (Keyboard Interactions)**：模拟人类的打字和快捷键习惯。
         * **`type` (输入)**
             * **参数**: `text` (string): 要输入的文本。`submit` (bool, 可选, 默认 False): 输入完成后是否自动按 Enter 键。
-            * **逻辑**: 模拟键盘敲击。建议字符间增加 0.05s~0.1s 的随机微延迟，防止被某些网页判定为机器人。如果 `submit` 为真，打字结束后触发 `press("enter")`。
+            * **逻辑**: 模拟键盘敲击。对于非ASCII字符（如中文），会自动使用剪贴板粘贴的方式输入。如果 `submit` 为真，打字结束后触发 `press("enter")`。
             * **示例**: `<action>{"type": "type", "text": "Hello World", "submit": true}</action>`
         * **`hotkey` (组合键)**
             * **参数**: `keys` (list of strings)
@@ -114,6 +112,10 @@
             * **参数**: `seconds` (float)
             * **逻辑**: 阻塞执行线程。
             * **场景**: 点击“下载”后，必须等待页面跳转或文件弹出。这是 Agent 成功率的关键。
+        * **`final_answer` (任务完成)**
+            * **参数**: `text` (string)
+            * **逻辑**: 标志任务已完全完成，并输出最终结果。
+            * **场景**: 任务的所有步骤都已执行完毕，向用户汇报最终状态或结果。
 
 * **执行反馈**：
     * 执行成功返回字符串：`"Action move (100, 200) executed."`
@@ -194,8 +196,9 @@ Agent 的大脑，负责调度与逻辑流。
 
 负责生命周期管理。
 
-* **GUI 界面**：运行后弹出美观但简约的用户界面，用户输入任务，点击运行。
+* **运行模式**：
+    * **Debug模式 (DEBUG_MODE=True)**：启动GUI界面，显示实时日志，并在截图和执行操作时自动隐藏窗口。适合开发调试。
+    * **终端模式 (DEBUG_MODE=False)**：在命令行终端直接运行，无GUI干扰。适合生产环境或普通用户使用。
 * **主任务执行**：通过调用`step()`进行用户任务实现。
-* **截图隐藏**：在截图时，该界面会隐藏。
 * **实时反馈**：模型的输出会以流式实时显示。
 * **紧急中断**：当用户在键盘上输入连续的3个ESC时退出程序。

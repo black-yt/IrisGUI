@@ -90,7 +90,7 @@ class IrisGUI:
                     log_callback=self.log
                 )
                 
-                if "Max steps reached" in feedback:
+                if "Max steps reached" in feedback or "Task Completed" in feedback:
                     self.running = False
                     break
                 
@@ -138,7 +138,7 @@ def run_console_agent(task):
             # agent.step already prints to stdout, so we don't need a log_callback that prints
             feedback = agent.step()
             
-            if "Max steps reached" in feedback:
+            if "[Max Steps Reached]" in feedback or "[Task Completed]" in feedback:
                 running = False
                 break
             
