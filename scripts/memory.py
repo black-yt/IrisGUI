@@ -27,7 +27,7 @@ class HierarchicalMemory:
         if len(self.short_memory_layer) >= MAX_SHORT_MEMORY:
             self.compress_context()
 
-    def compress_memory(self, memory_list, prompt, max_tokens=200):
+    def compress_memory(self, memory_list, prompt, max_tokens=None):
         """
         使用 LLM 压缩记忆列表。
         """
@@ -81,7 +81,7 @@ Summarize the provided interaction logs into a brief paragraph.
 - Note the system's feedback or state changes.
 - Format as: "The agent [action] resulting in [outcome]."
 """,
-                max_tokens=200
+                max_tokens=None
             )
             
             # 将总结追加到 long_memory_layer
@@ -110,7 +110,7 @@ Consolidate the following historical summaries into a single high-level overview
 - Preserve any ongoing goals or pending errors that need resolution.
 - Discard transient details that are no longer relevant to the current state.
 """,
-                    max_tokens=300
+                    max_tokens=None
                 )
                 self.long_memory_layer.insert(0, {"role": "system", "content": f"Long Term Memory: {summary}"})
                 

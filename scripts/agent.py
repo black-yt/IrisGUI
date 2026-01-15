@@ -174,10 +174,12 @@ Reasoning...
                 model=LLM_MODEL_NAME,
                 messages=messages,
                 stream=True,
-                max_tokens=1000 # 防止输出过长
+                max_tokens=None
             )
             
             for chunk in stream:
+                if not chunk.choices:
+                    continue
                 content = chunk.choices[0].delta.content
                 if content:
                     print(content, end="", flush=True)
