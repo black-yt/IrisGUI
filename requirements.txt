@@ -4,3 +4,4 @@ json_repair
 openai
 pynput
 python-dotenv
+pyperclip

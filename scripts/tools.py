@@ -4,6 +4,7 @@ from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from scripts.config import *
 import pyautogui
+import pyperclip
 
 # 设置 pyautogui 的一些安全参数
 pyautogui.FAILSAFE = True
@@ -251,7 +252,16 @@ class ActionExecutor:
             elif action_type == "type":
                 text = action_dict.get("text", "")
                 submit = action_dict.get("submit", False)
-                pyautogui.write(text, interval=0.05)
+                
+                # Check if text contains non-ASCII characters (e.g. Chinese)
+                if all(ord(c) < 128 for c in text):
+                    pyautogui.write(text, interval=0.05)
+                else:
+                    pyperclip.copy(text)
+                    time.sleep(0.1)
+                    pyautogui.hotkey('ctrl', 'v')
+                    time.sleep(0.1)
+                
                 if submit:
                     pyautogui.press("enter")
                 return f"Action type '{text}' executed."
@@ -279,6 +289,7 @@ class ActionExecutor:
         return result
 
 if __name__ == "__main__":
+    # python -m scripts.tools
     print("Testing tools.py...")
     
     # Test VisionPerceptor
@@ -304,7 +315,8 @@ if __name__ == "__main__":
         # Test move
         result = executor.execute({"action_type": "move", "point_id": "L-00-00"}, mock_map)
         result = executor.execute({'action_type': 'click', 'button': 'left', 'repeat': 1}, mock_map)
-        result = executor.execute({"action_type": "type", "text": "111111111111111111"}, mock_map)
+        result = executor.execute({"action_type": "type", "text": "111", "submit": True}, mock_map)
+        result = executor.execute({"action_type": "type", "text": "徐望瀚"}, mock_map)
         print(f"Move result: {result}")
         
     except Exception as e:
