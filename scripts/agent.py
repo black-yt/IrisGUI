@@ -231,8 +231,8 @@ Reasoning...
             log(f"❌ {feedback}")
 
         # 7. 记忆
-        self.memory.add_step("assistant", full_response)
-        self.memory.add_step("user", f"Execution Result: {feedback}")
+        self.memory.add_step("assistant", full_response, log_callback=log)
+        self.memory.add_step("user", f"Execution Result: {feedback}", log_callback=log)
         
         return feedback
 

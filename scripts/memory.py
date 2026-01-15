@@ -17,7 +17,7 @@ class HierarchicalMemory:
             base_url=LLM_API_ENDPOINT
         )
 
-    def add_step(self, role, content):
+    def add_step(self, role, content, log_callback=None):
         """
         将新的一步加入 short_memory_layer。只记录文本步骤和执行结果。
         """
@@ -25,7 +25,7 @@ class HierarchicalMemory:
         
         # 检查是否需要压缩
         if len(self.short_memory_layer) >= MAX_SHORT_MEMORY:
-            self.compress_context()
+            self.compress_context(log_callback)
 
     def compress_memory(self, memory_list, prompt, max_tokens=None):
         """
@@ -62,10 +62,18 @@ Your task is to compress the agent's operational history into concise summaries.
         )
         return response.choices[0].message.content
 
-    def compress_context(self):
+    def compress_context(self, log_callback=None):
         """
         当 short_memory_layer 长度达到上限时触发压缩。
         """
+        def log(msg):
+            if log_callback:
+                log_callback(msg)
+            else:
+                print(msg)
+
+        log("⏳ Compressing short memory...")
+
         # 1. 压缩 Short Memory -> Long Memory
         # 取出最早的 COMPRESSION_RATIO 步
         steps_to_compress = self.short_memory_layer[:COMPRESSION_RATIO]
@@ -85,10 +93,11 @@ Summarize the provided interaction logs into a brief paragraph.
             )
             
             # 将总结追加到 long_memory_layer
-            self.long_memory_layer.append({"role": "system", "content": f"History Summary: {summary}"})
+            self.long_memory_layer.append({"role": "assistant", "content": f"History Summary: {summary}"})
+            log(f"✅ Short memory compressed. Summary: {summary[:100]}...")
             
         except Exception as e:
-            print(f"Error compressing short memory: {e}")
+            log(f"❌ Error compressing short memory: {e}")
             # 如果失败，可能需要把未压缩的放回去或者保留
             # 这里简单处理：打印错误，不丢失数据（放回）
             self.short_memory_layer = steps_to_compress + self.short_memory_layer
@@ -96,6 +105,7 @@ Summarize the provided interaction logs into a brief paragraph.
 
         # 2. 检查 Long Memory 是否需要压缩
         if len(self.long_memory_layer) >= MAX_LONG_MEMORY:
+            log("⏳ Compressing long memory...")
             # 压缩 Long Memory
             long_memories_to_compress = self.long_memory_layer[:COMPRESSION_RATIO]
             self.long_memory_layer = self.long_memory_layer[COMPRESSION_RATIO:]
@@ -112,10 +122,11 @@ Consolidate the following historical summaries into a single high-level overview
 """,
                     max_tokens=None
                 )
-                self.long_memory_layer.insert(0, {"role": "system", "content": f"Long Term Memory: {summary}"})
+                self.long_memory_layer.insert(0, {"role": "assistant", "content": f"Long Term Memory: {summary}"})
+                log(f"✅ Long memory compressed. Summary: {summary[:100]}...")
                 
             except Exception as e:
-                print(f"Error compressing long memory: {e}")
+                log(f"❌ Error compressing long memory: {e}")
                 self.long_memory_layer = long_memories_to_compress + self.long_memory_layer
 
     def _encode_image(self, image):
@@ -184,6 +195,14 @@ if __name__ == "__main__":
         # 简单的验证
         assert len(context) == 5 # 2 fixed + 2 short + 1 query
         print("Basic logic verification passed.")
+
+        for _ in range(30):
+            memory.add_step("assistant", "I am thinking...")
+            memory.add_step("user", "Result: Success")
+
+        context = memory.get_full_context("Next step?")
+        import json
+        print(json.dumps(context, indent=4))
         
     except Exception as e:
         print(f"Test failed: {e}")

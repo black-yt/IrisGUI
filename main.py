@@ -90,7 +90,7 @@ class IrisGUI:
                     log_callback=self.log
                 )
                 
-                if "Max steps reached" in feedback or "Task Completed" in feedback:
+                if "[Max Steps Reached]" in feedback or "[Task Completed]" in feedback:
                     self.running = False
                     break
                 

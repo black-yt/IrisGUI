@@ -18,11 +18,10 @@ class VisionPerceptor:
         self.pre_callback = pre_callback
         self.post_callback = post_callback
 
-    def _draw_mouse(self, image, local_x, local_y):
+    def _draw_mouse(self, image, local_x, local_y, r=8):
         draw = ImageDraw.Draw(image)
         # 绘制一个简单的箭头或标记来表示鼠标位置
         # 这里画一个以 (x,y) 为中心的十字或者圆圈
-        r = 8
         draw.ellipse((local_x-r, local_y-r, local_x+r, local_y+r), outline=GRID_COLOR, width=MOUSE_WIDTH)
         draw.line((local_x-r, local_y, local_x+r, local_y), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
         draw.line((local_x, local_y-r, local_x, local_y+r), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
@@ -140,7 +139,7 @@ class VisionPerceptor:
         global_image, global_map = self._draw_grid_with_labels(global_image_raw, GRID_STEP, "G", 0, 0)
 
         # Draw mouse on global view
-        self._draw_mouse(global_image, mouse_x, mouse_y)
+        self._draw_mouse(global_image, mouse_x, mouse_y, r=16)
         
         # 2. 生成局部视图 (Local View)
         # 以鼠标为中心裁剪
@@ -160,7 +159,7 @@ class VisionPerceptor:
         # Mouse position relative to the crop
         local_mouse_x = mouse_x - left
         local_mouse_y = mouse_y - top
-        self._draw_mouse(local_image, local_mouse_x, local_mouse_y)
+        self._draw_mouse(local_image, local_mouse_x, local_mouse_y, r=8)
 
         # Merge maps
         full_coordinate_map = {**global_map, **local_map}
