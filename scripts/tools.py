@@ -49,10 +49,10 @@ class VisionPerceptor:
         # 绘制一个简单的箭头或标记来表示鼠标位置
         # 这里画一个以 (x,y) 为中心的十字或者圆圈，文档说是“醒目颜色的箭头”
         # 为了简单且清晰，我们画一个带边框的圆圈和十字
-        r = 10
-        draw.ellipse((x-r, y-r, x+r, y+r), outline=MOUSE_COLOR, width=MOUSE_WIDTH)
-        draw.line((x-r*2, y, x+r*2, y), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
-        draw.line((x, y-r*2, x, y+r*2), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
+        r = 15
+        draw.ellipse((x-r, y-r, x+r, y+r), outline=GRID_COLOR, width=MOUSE_WIDTH)
+        draw.line((x-r, y, x+r, y), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
+        draw.line((x, y-r, x, y+r), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
         return image
 
     def capture_state(self):
