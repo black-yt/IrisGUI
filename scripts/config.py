@@ -16,6 +16,7 @@ LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME")
 # 视觉参数
 # ===========================
 GRID_STEP = int(os.getenv("GRID_STEP", 100))          # 全局网格线的间距，单位像素
+LOCAL_GRID_STEP = int(os.getenv("LOCAL_GRID_STEP", 30)) # 局部细网格线的间距
 CROP_SIZE = int(os.getenv("CROP_SIZE", 500))          # 局部截图的宽高，单位像素
 GRID_COLOR = os.getenv("GRID_COLOR", "red")           # 网格标记的颜色
 GRID_WIDTH = int(os.getenv("GRID_WIDTH", 1))          # 网格标记的线宽
@@ -40,6 +41,7 @@ if __name__ == "__main__":
     print(f"LLM_API_ENDPOINT: {LLM_API_ENDPOINT}")
     print(f"LLM_MODEL_NAME: {LLM_MODEL_NAME}")
     print(f"GRID_STEP: {GRID_STEP}")
+    print(f"LOCAL_GRID_STEP: {LOCAL_GRID_STEP}")
     print(f"CROP_SIZE: {CROP_SIZE}")
     print(f"MAX_STEPS: {MAX_STEPS}")
     print(f"DEBUG_MODE: {DEBUG_MODE}")

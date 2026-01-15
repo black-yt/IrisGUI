@@ -81,23 +81,21 @@ class IrisGUI:
     def run_agent(self, task):
         self.log(f"Starting task: {task}")
         try:
-            self.agent = IrisAgent(task)
-            
-            def pre_capture():
+            def pre_callback():
                 # 截图前隐藏窗口
                 self.root.withdraw()
                 time.sleep(0.5) # 等待窗口隐藏
 
-            def post_capture():
+            def post_callback():
                 # 截图后恢复窗口
                 self.root.deiconify()
                 self.root.state('zoomed')
 
+            self.agent = IrisAgent(task, pre_callback=pre_callback, post_callback=post_callback)
+            
             while self.running:
                 # 执行一步，传入回调函数控制窗口显隐
                 feedback = self.agent.step(
-                    pre_capture_callback=pre_capture,
-                    post_capture_callback=post_capture,
                     log_callback=self.log
                 )
                 

@@ -10,212 +10,124 @@ pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.1
 
 class VisionPerceptor:
-    def __init__(self):
+    def __init__(self, pre_callback=None, post_callback=None):
         self.debug_dir = os.path.join(os.path.dirname(__file__), "debug")
         if not os.path.exists(self.debug_dir):
             os.makedirs(self.debug_dir)
+        self.pre_callback = pre_callback
+        self.post_callback = post_callback
 
-    def _draw_grid(self, image):
-        draw = ImageDraw.Draw(image)
+    def _draw_grid_with_labels(self, image, step, prefix, offset_x=0, offset_y=0):
+        """
+        Draws a grid on the image and adds a white border with labels.
+        Returns the processed image and a dictionary mapping IDs to GLOBAL coordinates.
+        
+        :param image: The PIL image to draw on.
+        :param step: Grid step size.
+        :param prefix: 'G' for Global, 'L' for Local.
+        :param offset_x: The global x-coordinate of the top-left corner of this image (for Local view).
+        :param offset_y: The global y-coordinate of the top-left corner of this image (for Local view).
+        """
         width, height = image.size
-        step = GRID_STEP
+        padding = 40 # Width of the white border
         
-        # 绘制网格线
-        for x in range(0, width, step):
-            draw.line([(x, 0), (x, height)], fill=GRID_COLOR, width=GRID_WIDTH)
-        for y in range(0, height, step):
-            draw.line([(0, y), (width, y)], fill=GRID_COLOR, width=GRID_WIDTH)
-            
-        # 绘制坐标文字
-        # 尝试加载字体，如果失败使用默认字体
-        try:
-            font = ImageFont.truetype("arial.ttf", 20)
-        except IOError:
-            font = ImageFont.load_default()
-            
-        for x in range(0, width, step):
-            for y in range(0, height, step):
-                # 在交叉点绘制坐标 (x, y)
-                text = f"x={x}\ny={y}"
-                # 添加一点背景框以便看清文字
-                bbox = draw.textbbox((x, y), text, font=font)
-                
-                # 临时转为 RGBA 以支持半透明
-                if image.mode != 'RGBA':
-                    image = image.convert('RGBA')
-                    draw = ImageDraw.Draw(image)
-                
-                overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-                overlay_draw = ImageDraw.Draw(overlay)
-                overlay_draw.rectangle(bbox, fill=(255, 255, 255, 180))
-                image = Image.alpha_composite(image, overlay)
-                draw = ImageDraw.Draw(image)
-                
-                draw.text((x, y), text, fill="black", font=font)
-                
-        # 转回 RGB
-        if image.mode == 'RGBA':
-            image = image.convert('RGB')
-            
-        return image
-
-    def _draw_mouse(self, image, x, y, local_x, local_y):
-        draw = ImageDraw.Draw(image)
-        # 绘制一个简单的箭头或标记来表示鼠标位置
-        # 这里画一个以 (x,y) 为中心的十字或者圆圈，文档说是“醒目颜色的箭头”
-        # 为了简单且清晰，我们画一个带边框的圆圈和十字
-        r = 15
-        draw.ellipse((local_x-r, local_y-r, local_x+r, local_y+r), outline=GRID_COLOR, width=MOUSE_WIDTH)
-        draw.line((local_x-r, local_y, local_x+r, local_y), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
-        draw.line((local_x, local_y-r, local_x, local_y+r), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
+        # Create a new canvas with white border
+        new_width = width + 2 * padding
+        new_height = height + 2 * padding
+        canvas = Image.new('RGB', (new_width, new_height), color='white')
         
-        # 在鼠标的标签下面标出左边（x,y）
+        # Paste the original image in the center
+        canvas.paste(image, (padding, padding))
+        draw = ImageDraw.Draw(canvas)
+        
         try:
             font = ImageFont.truetype("arial.ttf", 16)
         except IOError:
             font = ImageFont.load_default()
-            
-        text = f"x={x}\ny={y}"
-        
-        # 计算文本尺寸
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        
-        # 默认位置：鼠标下方居中
-        text_x = local_x - text_width // 2
-        text_y = local_y + r + 5
-        
-        # 边界检查与调整
-        img_width, img_height = image.size
-        
-        # 如果下方超出边界，则放在上方
-        if text_y + text_height > img_height:
-            text_y = y - r - 5 - text_height
-            
-        # 如果上方也超出（极少见，除非图片极小），则保持在边界内
-        if text_y < 0:
-            text_y = 0
-            
-        # 如果左边超出边界，则靠左对齐
-        if text_x < 0:
-            text_x = 0
-            
-        # 如果右边超出边界，则靠右对齐
-        if text_x + text_width > img_width:
-            text_x = img_width - text_width
-        
-        # 绘制背景框以提高可读性
-        # 使用半透明白色背景，无边框
-        padding = 2
-        
-        # 创建一个半透明图层
-        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-        overlay_draw = ImageDraw.Draw(overlay)
-        
-        # 绘制半透明白色矩形 (255, 255, 255, 180)
-        overlay_draw.rectangle(
-            (text_x - padding, text_y - padding, text_x + text_width + padding, text_y + text_height + padding),
-            fill=(255, 255, 255, 180)
-        )
-        
-        # 将半透明图层合并到原图
-        image = Image.alpha_composite(image.convert('RGBA'), overlay)
-        
-        # 重新获取 draw 对象（因为 image 变了）
-        draw = ImageDraw.Draw(image)
-        
-        # 绘制文本
-        draw.text(
-            (text_x, text_y),
-            text,
-            fill="red",
-            font=font
-        )
-        
-        # 转回 RGB
-        image = image.convert('RGB')
-        
-        return image
 
-    def _draw_corners(self, image, left, top, right, bottom):
-        draw = ImageDraw.Draw(image)
-        width, height = image.size
+        coordinate_map = {}
         
-        try:
-            font = ImageFont.truetype("arial.ttf", 20)
-        except IOError:
-            font = ImageFont.load_default()
+        # Draw vertical lines and X-axis labels
+        col_index = 0
+        for x in range(0, width, step):
+            # Line on the image
+            draw_x = x + padding
+            draw.line([(draw_x, padding), (draw_x, new_height - padding)], fill=GRID_COLOR, width=GRID_WIDTH)
             
-        corners = [
-            (0, 0, f"x={left}\ny={top}", 'left', 'top'),
-            (width, 0, f"x={right}\ny={top}", 'right', 'top'),
-            (0, height, f"x={left}\ny={bottom}", 'left', 'bottom'),
-            (width, height, f"x={right}\ny={bottom}", 'right', 'bottom')
-        ]
-        
-        # Ensure RGBA for transparency
-        if image.mode != 'RGBA':
-            image = image.convert('RGBA')
-        
-        for x, y, text, anchor_x, anchor_y in corners:
-            # Re-create draw object for the current image state
-            draw = ImageDraw.Draw(image)
-            
-            # Calculate text size
-            bbox = draw.textbbox((0, 0), text, font=font)
+            # Label on top border
+            label = f"{col_index:02d}"
+            bbox = draw.textbbox((0, 0), label, font=font)
             text_w = bbox[2] - bbox[0]
+            draw.text((draw_x - text_w // 2, 5), label, fill="black", font=font)
+            
+            # Label on bottom border
+            draw.text((draw_x - text_w // 2, new_height - padding + 5), label, fill="black", font=font)
+            
+            col_index += 1
+
+        # Draw horizontal lines and Y-axis labels
+        row_index = 0
+        for y in range(0, height, step):
+            # Line on the image
+            draw_y = y + padding
+            draw.line([(padding, draw_y), (new_width - padding, draw_y)], fill=GRID_COLOR, width=GRID_WIDTH)
+            
+            # Label on left border
+            label = f"{row_index:02d}"
+            bbox = draw.textbbox((0, 0), label, font=font)
             text_h = bbox[3] - bbox[1]
+            draw.text((5, draw_y - text_h // 2), label, fill="black", font=font)
             
-            # Determine position
-            padding = 4
-            if anchor_x == 'left':
-                draw_x = x + padding
-            else:
-                draw_x = x - text_w - padding
+            # Label on right border
+            draw.text((new_width - padding + 5, draw_y - text_h // 2), label, fill="black", font=font)
+            
+            row_index += 1
+
+        # Generate Coordinate Map
+        # Re-iterate to populate map (or do it in the loops above, but nested is easier for map)
+        
+        for c in range(col_index): # Use actual count from loop
+            for r in range(row_index):
+                # ID format: PREFIX-XX-YY
+                point_id = f"{prefix}-{c:02d}-{r:02d}"
                 
-            if anchor_y == 'top':
-                draw_y = y + padding
-            else:
-                draw_y = y - text_h - padding
+                # Local coordinate on the image (not canvas)
+                local_img_x = c * step
+                local_img_y = r * step
                 
-            # Draw background
-            overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-            overlay_draw = ImageDraw.Draw(overlay)
-            
-            bg_bbox = (
-                draw_x - 2,
-                draw_y - 2,
-                draw_x + text_w + 2,
-                draw_y + text_h + 2
-            )
-            overlay_draw.rectangle(bg_bbox, fill=(255, 255, 255, 180))
-            image = Image.alpha_composite(image, overlay)
-            
-            # Draw text
-            draw = ImageDraw.Draw(image)
-            draw.text((draw_x, draw_y), text, fill="black", font=font)
-            
-        if image.mode == 'RGBA':
-            image = image.convert('RGB')
-            
-        return image
+                # Global coordinate
+                global_x = offset_x + local_img_x
+                global_y = offset_y + local_img_y
+                
+                coordinate_map[point_id] = (global_x, global_y)
+                
+        return canvas, coordinate_map
 
     def capture_state(self):
+        if self.pre_callback:
+            self.pre_callback()
+
         # 获取屏幕截图和鼠标位置
         try:
             screenshot = pyautogui.screenshot()
             mouse_x, mouse_y = pyautogui.position()
+            
+            # Ensure mouse coordinates are within screenshot bounds
+            # This handles multi-monitor setups where mouse might be outside the primary screen
+            mouse_x = max(0, min(mouse_x, screenshot.width - 1))
+            mouse_y = max(0, min(mouse_y, screenshot.height - 1))
+            
         except Exception as e:
             print(f"Error capturing state: {e}")
-            # 返回空对象或抛出异常，视情况而定。这里创建一个空白图像作为 fallback
             screenshot = Image.new('RGB', (1920, 1080), color='black')
             mouse_x, mouse_y = 0, 0
 
         # 1. 生成全局视图 (Global View)
-        global_image = screenshot.copy()
-        global_image = self._draw_grid(global_image)
-        global_image = self._draw_mouse(global_image, mouse_x, mouse_y, mouse_x, mouse_y)
+        # Global view uses GRID_STEP and prefix 'G'
+        global_image_raw = screenshot.copy()
+        global_image, global_map = self._draw_grid_with_labels(global_image_raw, GRID_STEP, "G", 0, 0)
+        
+        # Mouse drawing removed as per instruction
 
         # 2. 生成局部视图 (Local View)
         # 以鼠标为中心裁剪
@@ -225,21 +137,16 @@ class VisionPerceptor:
         right = min(screenshot.width, mouse_x + crop_half)
         bottom = min(screenshot.height, mouse_y + crop_half)
         
-        # 处理边界情况，保持裁剪尺寸一致（如果靠近边缘，可能需要调整）
-        # 简单起见，如果靠近边缘，裁剪区域可能会小于 CROP_SIZE，或者我们可以平移裁剪框
-        # 这里我们简单裁剪，如果不足 CROP_SIZE 也不强制填充，但为了坐标一致性，最好保持中心
-        # 实际上，为了让模型理解，局部图最好就是以鼠标为中心。
+        local_image_raw = screenshot.crop((left, top, right, bottom))
         
-        local_image = screenshot.crop((left, top, right, bottom))
+        # Local view uses LOCAL_GRID_STEP and prefix 'L'
+        # Pass (left, top) as offset so the map contains global coordinates
+        local_image, local_map = self._draw_grid_with_labels(local_image_raw, LOCAL_GRID_STEP, "L", left, top)
         
-        # 在局部图上绘制鼠标位置
-        # 鼠标在局部图中的相对坐标
-        local_mouse_x = mouse_x - left
-        local_mouse_y = mouse_y - top
-        local_image = self._draw_mouse(local_image, mouse_x, mouse_y, local_mouse_x, local_mouse_y)
-        
-        # 绘制局部视图的4个顶点坐标
-        local_image = self._draw_corners(local_image, left, top, right, bottom)
+        # Mouse drawing removed as per instruction
+
+        # Merge maps
+        full_coordinate_map = {**global_map, **local_map}
 
         # Debug 存档
         if DEBUG_MODE:
@@ -248,28 +155,43 @@ class VisionPerceptor:
             local_path = os.path.join(self.debug_dir, f"local_{timestamp}.png")
             global_image.save(global_path)
             local_image.save(local_path)
-            # print(f"Debug images saved: {global_path}, {local_path}")
 
-        return global_image, local_image, (left, top, right, bottom), (mouse_x, mouse_y)
+        if self.post_callback:
+            self.post_callback()
+
+        return global_image, local_image, full_coordinate_map
 
 
 class ActionExecutor:
-    def execute(self, action_dict):
-        action_type = action_dict.get("type")
+    def __init__(self, pre_callback=None, post_callback=None):
+        self.pre_callback = pre_callback
+        self.post_callback = post_callback
+
+    def execute(self, action_dict, coordinate_map=None):
+        if self.pre_callback:
+            self.pre_callback()
+
+        action_type = action_dict.get("action_type")
         
+        result = ""
         try:
             if action_type == "move":
-                x = int(action_dict.get("x"))
-                y = int(action_dict.get("y"))
+                point_id = action_dict.get("point_id")
                 duration = float(action_dict.get("duration", 0.5))
-                pyautogui.moveTo(x, y, duration=duration, tween=pyautogui.easeInOutQuad)
-                return f"Action move ({x}, {y}) executed."
+                
+                if not point_id:
+                    return "Error: 'point_id' is required for move action."
+                
+                if coordinate_map and point_id in coordinate_map:
+                    x, y = coordinate_map[point_id]
+                    pyautogui.moveTo(x, y, duration=duration, tween=pyautogui.easeInOutQuad)
+                    return f"Action move to {point_id} ({x}, {y}) executed."
+                else:
+                    return f"Error: Point ID '{point_id}' not found in coordinate map."
 
             elif action_type == "click":
                 button = action_dict.get("button", "left")
                 repeat = int(action_dict.get("repeat", 1))
-                # pyautogui.click 支持 clicks 参数，但 repeat=2 时通常用 doubleClick 更明确，
-                # 不过这里直接用 clicks 参数也可以
                 pyautogui.click(button=button, clicks=repeat)
                 return f"Action click ({button}, repeat={repeat}) executed."
 
@@ -278,20 +200,38 @@ class ActionExecutor:
                 return "Action double_click executed."
 
             elif action_type == "drag":
-                to_x = int(action_dict.get("to_x"))
-                to_y = int(action_dict.get("to_y"))
-                from_x = action_dict.get("from_x")
-                from_y = action_dict.get("from_y")
+                # Drag logic might need update if we want to support dragging to IDs too
+                # For now, let's assume drag still uses coordinates or we update it to use IDs?
+                # The user only mentioned "move" action changes. Let's keep drag as is for now or update if needed.
+                # But wait, if the model can't output coordinates, drag will fail.
+                # Let's update drag to use point_id for to_x/to_y as well.
+                
+                to_id = action_dict.get("to_id")
+                from_id = action_dict.get("from_id") # Optional
                 duration = float(action_dict.get("duration", 1.0))
+                
+                if not to_id:
+                     return "Error: 'to_id' is required for drag action."
+                
+                if not coordinate_map:
+                    return "Error: Coordinate map missing."
 
-                if from_x is not None and from_y is not None:
-                    pyautogui.moveTo(int(from_x), int(from_y))
+                if to_id not in coordinate_map:
+                    return f"Error: Target ID '{to_id}' not found."
+                
+                to_x, to_y = coordinate_map[to_id]
+                
+                if from_id:
+                    if from_id not in coordinate_map:
+                        return f"Error: Start ID '{from_id}' not found."
+                    from_x, from_y = coordinate_map[from_id]
+                    pyautogui.moveTo(from_x, from_y)
                 
                 pyautogui.mouseDown()
-                time.sleep(0.1) # 模拟抓取确认
+                time.sleep(0.1)
                 pyautogui.moveTo(to_x, to_y, duration=duration)
                 pyautogui.mouseUp()
-                return f"Action drag to ({to_x}, {to_y}) executed."
+                return f"Action drag to {to_id} ({to_x}, {to_y}) executed."
 
             elif action_type == "hover":
                 duration = float(action_dict.get("duration", 1.0))
@@ -302,10 +242,9 @@ class ActionExecutor:
                 direction = action_dict.get("direction", "down")
                 amount_str = action_dict.get("amount", "line")
                 
-                # 定义滚动量
                 clicks = 0
                 if amount_str == "line":
-                    clicks = 100 # 假设 100 是一个合理的单位
+                    clicks = 100
                 elif amount_str == "half":
                     clicks = 500
                 elif amount_str == "page":
@@ -316,7 +255,7 @@ class ActionExecutor:
                 elif direction == "down":
                     pyautogui.scroll(-clicks)
                 elif direction == "left":
-                    pyautogui.hscroll(-clicks) # hscroll 负值通常向左? 需要测试，通常负值向左
+                    pyautogui.hscroll(-clicks)
                 elif direction == "right":
                     pyautogui.hscroll(clicks)
                 
@@ -325,7 +264,7 @@ class ActionExecutor:
             elif action_type == "type":
                 text = action_dict.get("text", "")
                 submit = action_dict.get("submit", False)
-                pyautogui.write(text, interval=0.05) # 模拟打字延迟
+                pyautogui.write(text, interval=0.05)
                 if submit:
                     pyautogui.press("enter")
                 return f"Action type '{text}' executed."
@@ -342,10 +281,15 @@ class ActionExecutor:
                 return f"Action wait {seconds}s executed."
 
             else:
-                return f"Error: Unknown action type '{action_type}'."
+                result = f"Error: Unknown action type '{action_type}'."
 
         except Exception as e:
-            return f"Error executing action {action_type}: {str(e)}"
+            result = f"Error executing action {action_type}: {str(e)}"
+        
+        if self.post_callback:
+            self.post_callback()
+            
+        return result
 
 if __name__ == "__main__":
     print("Testing tools.py...")
@@ -354,8 +298,12 @@ if __name__ == "__main__":
     try:
         print("Testing VisionPerceptor...")
         vision = VisionPerceptor()
-        global_img, local_img, bbox, mouse_xy = vision.capture_state()
-        print(f"Capture successful. Global size: {global_img.size}, Local size: {local_img.size}, BBox: {bbox}, Mouse position: {mouse_xy}")
+        global_img, local_img, coord_map = vision.capture_state()
+        print(f"Capture successful.")
+        print(f"Global size: {global_img.size}")
+        print(f"Local size: {local_img.size}")
+        print(f"Map size: {len(coord_map)}")
+        print(f"Sample G point: {list(coord_map.keys())[0]} -> {list(coord_map.values())[0]}")
     except Exception as e:
         print(f"VisionPerceptor test failed: {e}")
 
@@ -363,14 +311,12 @@ if __name__ == "__main__":
     try:
         print("Testing ActionExecutor...")
         executor = ActionExecutor()
-        # Test a safe action: wait
-        result = executor.execute({"type": "wait", "seconds": 0.5})
-        print(f"Wait action result: {result}")
+        # Mock map
+        mock_map = {"G-00-00": (0, 0), "L-00-00": (100, 100)}
         
-        # Optional: Test mouse move (small movement to verify)
-        # current_x, current_y = pyautogui.position()
-        # result = executor.execute({"type": "move", "x": current_x, "y": current_y, "duration": 0.1})
-        # print(f"Move action result: {result}")
+        # Test move
+        result = executor.execute({"action_type": "move", "point_id": "G-00-00"}, mock_map)
+        print(f"Move result: {result}")
         
     except Exception as e:
         print(f"ActionExecutor test failed: {e}")
