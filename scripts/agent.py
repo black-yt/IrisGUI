@@ -28,8 +28,8 @@ Your primary goal is to fulfill the user's request by executing a sequence of mo
     -   Analyze the current state relative to the user's goal.
     -   **Localization Strategy**: You must strictly follow one of these three cases for positioning:
         1.  **Global Approach**: If the target is visible in the Global View but NOT in the Local View, identify the nearest grid intersection point `G-xx-yy` to the target. Use the `move` action with this ID.
-        2.  **Local Approach**: If the target is visible in the Local View but not at the center, identify the nearest fine grid intersection point `L-xx-yy` to the target. Use the `move` action with this ID.
-        3.  **Target Aligned**: The target must be at the **CENTER** of the Local View. If the target is perfectly centered in the Local View, proceed with the interaction (click, type, etc.).
+        2.  **Local Approach**: If the target is visible in the Local View but not at the center, **you MUST use the Fine Grid IDs (`L-xx-yy`) to make precise adjustments.** Do NOT use Global Grid IDs (`G-xx-yy`) in this case, as they are too coarse. Identify the nearest fine grid intersection point `L-xx-yy` to the target and use the `move` action with this ID.
+        3.  **Target Aligned**: The target must be at the **CENTER** of the Local View. **Crucially, the crosshair center MUST significantly overlap with the target's clickable area (e.g., the icon itself, not just the label).** If the target is perfectly centered and overlapped, proceed with the interaction (click, type, etc.).
     -   **Grid Navigation**:
         -   Read the numbers on the top/bottom white border for the X-axis (column) index.
         -   Read the numbers on the left/right white border for the Y-axis (row) index.
@@ -67,22 +67,22 @@ Reasoning...
         <action>
         {"action_type": "click", "button": "left", "repeat": 2}
         </action>
-*   **double_click**: specific action for double clicking (alternative to click with repeat=2).
+*   **double_click**: specific action for double clicking (alternative to click with repeat=2). **Note: Opening desktop applications on Windows usually requires a double-click.**
     *   *Example*:
         <action>
         {"action_type": "double_click"}
         </action>
-*   **drag**: Drag the mouse from one point to another.
-    *   *Params*: `to_id` (string), `from_id` (string, optional), `duration` (float, default=1.0)
-    *   *Example*: Drag to Local point L-05-05.
+*   **mouse_down**: Press and hold a mouse button.
+    *   *Params*: `button` ("left"|"right"|"middle", default="left")
+    *   *Example*: Hold left button.
         <action>
-        {"action_type": "drag", "to_id": "L-05-05"}
+        {"action_type": "mouse_down", "button": "left"}
         </action>
-*   **hover**: Hover over the current position for a set time (useful for triggering tooltips).
-    *   *Params*: `duration` (float, default=1.0)
-    *   *Example*:
+*   **mouse_up**: Release a mouse button.
+    *   *Params*: `button` ("left"|"right"|"middle", default="left")
+    *   *Example*: Release left button.
         <action>
-        {"action_type": "hover", "duration": 2.0}
+        {"action_type": "mouse_up", "button": "left"}
         </action>
 *   **scroll**: Scroll the mouse wheel.
     *   *Params*: `direction` ("up"|"down"|"left"|"right"), `amount` ("line"|"half"|"page" or integer clicks)
@@ -90,6 +90,14 @@ Reasoning...
         <action>
         {"action_type": "scroll", "direction": "down", "amount": "page"}
         </action>
+
+**Complex Interactions**:
+*   **Dragging**: To perform a drag operation, decompose it into steps:
+    1.  `move` to the start position.
+    2.  `mouse_down` to hold the element.
+    3.  `move` to the destination (can be multiple moves if the path is long).
+    4.  `mouse_up` to release.
+*   **Hovering**: To hover, simply `move` to the target and then `wait`.
 
 #### 2. Keyboard Operations
 *   **type**: Type a string of text.
@@ -115,7 +123,7 @@ Reasoning...
 
 ## Constraints & Best Practices
 -   **One Action Per Step**: You may only output ONE action block per response.
--   **Precision Matters**: Always prioritize accuracy. If you are unsure about the cursor position, use a `move` action to reset or correct it.
+-   **Precision Matters**: Always prioritize accuracy. If you are unsure about the cursor position, use a `move` action to reset or correct it. **Ensure the crosshair is directly ON the target before clicking.**
 -   **Visual Verification**: Never assume the cursor is in the right place without checking the Local View.
 -   **Coordinate System**: DO NOT calculate or output raw (x, y) coordinates. ALWAYS use the Grid IDs (`G-xx-yy` or `L-xx-yy`) provided in the visual input.
 """
@@ -150,7 +158,7 @@ Reasoning...
         # 2. 构建 Context
         query = f"""## Current Step
 1. Analyze the Global View to understand the overall screen layout.
-2. Analyze the Local View to verify the precise mouse position (center of the image).
+2. Analyze the Local View to verify the precise mouse position (marked with a crosshair). **Note: This view reflects the state AFTER the previous action. The crosshair marks where the mouse is CURRENTLY located.**
 3. Based on the task history and current visual state, determine the next action.
 """
         log(f"❓ Query: {query}")

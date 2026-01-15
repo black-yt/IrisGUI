@@ -17,6 +17,16 @@ class VisionPerceptor:
         self.pre_callback = pre_callback
         self.post_callback = post_callback
 
+    def _draw_mouse(self, image, local_x, local_y):
+        draw = ImageDraw.Draw(image)
+        # 绘制一个简单的箭头或标记来表示鼠标位置
+        # 这里画一个以 (x,y) 为中心的十字或者圆圈
+        r = 8
+        draw.ellipse((local_x-r, local_y-r, local_x+r, local_y+r), outline=GRID_COLOR, width=MOUSE_WIDTH)
+        draw.line((local_x-r, local_y, local_x+r, local_y), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
+        draw.line((local_x, local_y-r, local_x, local_y+r), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
+        return image
+
     def _draw_grid_with_labels(self, image, step, prefix, offset_x=0, offset_y=0):
         """
         Draws a grid on the image and adds a white border with labels.
@@ -125,10 +135,12 @@ class VisionPerceptor:
         # 1. 生成全局视图 (Global View)
         # Global view uses GRID_STEP and prefix 'G'
         global_image_raw = screenshot.copy()
-        global_image, global_map = self._draw_grid_with_labels(global_image_raw, GRID_STEP, "G", 0, 0)
         
-        # Mouse drawing removed as per instruction
+        global_image, global_map = self._draw_grid_with_labels(global_image_raw, GRID_STEP, "G", 0, 0)
 
+        # Draw mouse on global view
+        self._draw_mouse(global_image, mouse_x, mouse_y)
+        
         # 2. 生成局部视图 (Local View)
         # 以鼠标为中心裁剪
         crop_half = CROP_SIZE // 2
@@ -142,8 +154,12 @@ class VisionPerceptor:
         # Local view uses LOCAL_GRID_STEP and prefix 'L'
         # Pass (left, top) as offset so the map contains global coordinates
         local_image, local_map = self._draw_grid_with_labels(local_image_raw, LOCAL_GRID_STEP, "L", left, top)
-        
-        # Mouse drawing removed as per instruction
+
+        # Draw mouse on local view
+        # Mouse position relative to the crop
+        local_mouse_x = mouse_x - left
+        local_mouse_y = mouse_y - top
+        self._draw_mouse(local_image, local_mouse_x, local_mouse_y)
 
         # Merge maps
         full_coordinate_map = {**global_map, **local_map}
@@ -199,44 +215,15 @@ class ActionExecutor:
                 pyautogui.doubleClick()
                 return "Action double_click executed."
 
-            elif action_type == "drag":
-                # Drag logic might need update if we want to support dragging to IDs too
-                # For now, let's assume drag still uses coordinates or we update it to use IDs?
-                # The user only mentioned "move" action changes. Let's keep drag as is for now or update if needed.
-                # But wait, if the model can't output coordinates, drag will fail.
-                # Let's update drag to use point_id for to_x/to_y as well.
-                
-                to_id = action_dict.get("to_id")
-                from_id = action_dict.get("from_id") # Optional
-                duration = float(action_dict.get("duration", 1.0))
-                
-                if not to_id:
-                     return "Error: 'to_id' is required for drag action."
-                
-                if not coordinate_map:
-                    return "Error: Coordinate map missing."
+            elif action_type == "mouse_down":
+                button = action_dict.get("button", "left")
+                pyautogui.mouseDown(button=button)
+                return f"Action mouse_down ({button}) executed."
 
-                if to_id not in coordinate_map:
-                    return f"Error: Target ID '{to_id}' not found."
-                
-                to_x, to_y = coordinate_map[to_id]
-                
-                if from_id:
-                    if from_id not in coordinate_map:
-                        return f"Error: Start ID '{from_id}' not found."
-                    from_x, from_y = coordinate_map[from_id]
-                    pyautogui.moveTo(from_x, from_y)
-                
-                pyautogui.mouseDown()
-                time.sleep(0.1)
-                pyautogui.moveTo(to_x, to_y, duration=duration)
-                pyautogui.mouseUp()
-                return f"Action drag to {to_id} ({to_x}, {to_y}) executed."
-
-            elif action_type == "hover":
-                duration = float(action_dict.get("duration", 1.0))
-                time.sleep(duration)
-                return f"Action hover for {duration}s executed."
+            elif action_type == "mouse_up":
+                button = action_dict.get("button", "left")
+                pyautogui.mouseUp(button=button)
+                return f"Action mouse_up ({button}) executed."
 
             elif action_type == "scroll":
                 direction = action_dict.get("direction", "down")
@@ -312,10 +299,12 @@ if __name__ == "__main__":
         print("Testing ActionExecutor...")
         executor = ActionExecutor()
         # Mock map
-        mock_map = {"G-00-00": (0, 0), "L-00-00": (100, 100)}
+        mock_map = {"G-00-00": (0, 0), "L-00-00": (1000, 800)}
         
         # Test move
-        result = executor.execute({"action_type": "move", "point_id": "G-00-00"}, mock_map)
+        result = executor.execute({"action_type": "move", "point_id": "L-00-00"}, mock_map)
+        result = executor.execute({'action_type': 'click', 'button': 'left', 'repeat': 1}, mock_map)
+        result = executor.execute({"action_type": "type", "text": "111111111111111111"}, mock_map)
         print(f"Move result: {result}")
         
     except Exception as e:
