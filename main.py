@@ -79,18 +79,21 @@ class IrisGUI:
         try:
             self.agent = IrisAgent(task)
             
-            while self.running:
+            def pre_capture():
                 # 截图前隐藏窗口
-                # 注意：在 Linux/X11 上 withdraw/deiconify 可能有延迟或闪烁
-                # 为了简单起见，我们尝试最小化或者移出屏幕，或者直接 withdraw
                 self.root.withdraw()
                 time.sleep(0.5) # 等待窗口隐藏
-                
-                # 执行一步
-                feedback = self.agent.step()
-                
-                # 恢复窗口
+
+            def post_capture():
+                # 截图后恢复窗口
                 self.root.deiconify()
+
+            while self.running:
+                # 执行一步，传入回调函数控制窗口显隐
+                feedback = self.agent.step(
+                    pre_capture_callback=pre_capture,
+                    post_capture_callback=post_capture
+                )
                 
                 # 记录反馈
                 self.log(f"Step Feedback: {feedback}")

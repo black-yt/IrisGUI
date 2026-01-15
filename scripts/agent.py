@@ -62,7 +62,7 @@ Reasoning...
         )
         self.step_count = 0
 
-    def step(self):
+    def step(self, pre_capture_callback=None, post_capture_callback=None):
         if self.step_count >= MAX_STEPS:
             return "Max steps reached. Stopping."
 
@@ -70,7 +70,13 @@ Reasoning...
         print(f"\n--- Step {self.step_count} ---")
 
         # 1. 感知
+        if pre_capture_callback:
+            pre_capture_callback()
+            
         global_image, local_image = self.vision.capture_state()
+        
+        if post_capture_callback:
+            post_capture_callback()
         
         # 2. 构建 Context
         # Query 可以是简单的提示，或者包含上一步的执行结果（如果有的话，但这里我们在 memory.add_step 中处理了）
