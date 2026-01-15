@@ -47,60 +47,60 @@ Reasoning...
 *   **move**: Move the cursor to specific coordinates.
     *   *Params*: `x` (integer), `y` (integer), `duration` (float, optional, default=0.5)
     *   *Example*: Move to coordinates (500, 300).
-        ```json
+        <action>
         {"type": "move", "x": 500, "y": 300}
-        ```
+        </action>
 *   **click**: Click the mouse button.
     *   *Params*: `button` ("left"|"right"|"middle", default="left"), `repeat` (integer, default=1)
     *   *Example*: Double-click the left button.
-        ```json
+        <action>
         {"type": "click", "button": "left", "repeat": 2}
-        ```
+        </action>
 *   **double_click**: specific action for double clicking (alternative to click with repeat=2).
     *   *Example*:
-        ```json
+        <action>
         {"type": "double_click"}
-        ```
+        </action>
 *   **drag**: Drag the mouse from one point to another.
     *   *Params*: `to_x` (int), `to_y` (int), `from_x` (int, optional), `from_y` (int, optional), `duration` (float, default=1.0)
     *   *Example*: Drag from current position to (800, 600).
-        ```json
+        <action>
         {"type": "drag", "to_x": 800, "to_y": 600}
-        ```
+        </action>
 *   **hover**: Hover over the current position for a set time (useful for triggering tooltips).
     *   *Params*: `duration` (float, default=1.0)
     *   *Example*:
-        ```json
+        <action>
         {"type": "hover", "duration": 2.0}
-        ```
+        </action>
 *   **scroll**: Scroll the mouse wheel.
     *   *Params*: `direction` ("up"|"down"|"left"|"right"), `amount` ("line"|"half"|"page" or integer clicks)
     *   *Example*: Scroll down by one page.
-        ```json
+        <action>
         {"type": "scroll", "direction": "down", "amount": "page"}
-        ```
+        </action>
 
 #### 2. Keyboard Operations
 *   **type**: Type a string of text.
     *   *Params*: `text` (string), `submit` (boolean, default=False - if true, presses Enter after typing)
     *   *Example*: Type "Hello World" and press Enter.
-        ```json
+        <action>
         {"type": "type", "text": "Hello World", "submit": true}
-        ```
+        </action>
 *   **hotkey**: Press a combination of keys.
     *   *Params*: `keys` (list of strings)
     *   *Example*: Copy (Ctrl+C).
-        ```json
+        <action>
         {"type": "hotkey", "keys": ["ctrl", "c"]}
-        ```
+        </action>
 
 #### 3. System Operations
 *   **wait**: Wait for a specified duration (useful for letting UI animations finish).
     *   *Params*: `seconds` (float)
     *   *Example*: Wait for 2.5 seconds.
-        ```json
+        <action>
         {"type": "wait", "seconds": 2.5}
-        ```
+        </action>
 
 ## Constraints & Best Practices
 -   **One Action Per Step**: You may only output ONE action block per response.
@@ -117,17 +117,25 @@ Reasoning...
         )
         self.step_count = 0
 
-    def step(self, pre_capture_callback=None, post_capture_callback=None):
+    def step(self, pre_capture_callback=None, post_capture_callback=None, log_callback=None):
         if self.step_count >= MAX_STEPS:
-            return "Max steps reached. Stopping."
+            return "🛑 Max steps reached. Stopping."
 
         self.step_count += 1
-        print(f"\n--- Step {self.step_count} ---")
+        
+        def log(text, end="\n"):
+            full_text = text + end
+            print(text, end=end, flush=True)
+            if log_callback:
+                log_callback(full_text)
+
+        log(f"\n➖➖➖➖➖➖➖➖➖➖ Step {self.step_count} ➖➖➖➖➖➖➖➖➖➖")
 
         # 1. 感知
         if pre_capture_callback:
             pre_capture_callback()
             
+        log("👀 Capturing screen...")
         global_image, local_image = self.vision.capture_state()
         
         if post_capture_callback:
@@ -142,7 +150,7 @@ Reasoning...
         messages = self.memory.get_full_context(query, images=(global_image, local_image))
 
         # 3. 推理 (Stream)
-        print("Thinking...")
+        log("🧠 Thinking...")
         full_response = ""
         action_block = None
         
@@ -158,6 +166,8 @@ Reasoning...
                 content = chunk.choices[0].delta.content
                 if content:
                     print(content, end="", flush=True)
+                    if log_callback:
+                        log_callback(content)
                     full_response += content
                     
                     # 4. 流式解析 (Parser) & 中断机制
@@ -169,10 +179,10 @@ Reasoning...
                         stream.close() 
                         break
             
-            print() # 换行
+            log("", end="\n") # 换行
 
         except Exception as e:
-            print(f"Error during LLM inference: {e}")
+            log(f"❌ Error during LLM inference: {e}")
             return f"Error: {e}"
 
         # 5. Action 解析与修复
@@ -183,18 +193,18 @@ Reasoning...
                 action_json_str = repair_json(action_block)
                 action_dict = json.loads(action_json_str)
                 
-                print(f"Executing Action: {action_dict}")
+                log(f"⚡ Executing Action: {action_dict}")
                 
                 # 6. 执行
                 feedback = self.executor.execute(action_dict)
-                print(f"Feedback: {feedback}")
+                log(f"✅ Feedback: {feedback}")
                 
             except Exception as e:
                 feedback = f"Error parsing or executing action: {e}. Raw block: {action_block}"
-                print(feedback)
+                log(f"❌ {feedback}")
         else:
             feedback = "Error: No valid <action> block found in response."
-            print(feedback)
+            log(f"❌ {feedback}")
 
         # 7. 记忆
         self.memory.add_step("assistant", full_response)

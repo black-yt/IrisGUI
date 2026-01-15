@@ -37,9 +37,12 @@ class IrisGUI:
         self.listener.start()
 
     def log(self, message):
-        self.log_area.insert(tk.END, message + "\n")
+        # 使用 after 方法在主线程中更新 UI
+        self.root.after(0, self._update_log, message)
+
+    def _update_log(self, message):
+        self.log_area.insert(tk.END, message)
         self.log_area.see(tk.END)
-        print(message) # 同时输出到控制台
 
     def on_key_press(self, key):
         if key == keyboard.Key.esc:
@@ -92,11 +95,9 @@ class IrisGUI:
                 # 执行一步，传入回调函数控制窗口显隐
                 feedback = self.agent.step(
                     pre_capture_callback=pre_capture,
-                    post_capture_callback=post_capture
+                    post_capture_callback=post_capture,
+                    log_callback=self.log
                 )
-                
-                # 记录反馈
-                self.log(f"Step Feedback: {feedback}")
                 
                 if "Max steps reached" in feedback:
                     self.running = False
