@@ -314,7 +314,7 @@ if __name__ == "__main__":
         print("Testing ActionExecutor...")
         executor = ActionExecutor()
         # Mock map
-        mock_map = {"G-00-00": (0, 0), "L-00-00": (1000, 800)}
+        mock_map = {"G-00-00": (0, 0), "L-00-00": (1000, 800), "L-00-01": (1000, 1000)}
         
         # Test move
         print("Testing move...")
@@ -339,19 +339,19 @@ if __name__ == "__main__":
         # Test drag (simulated)
         print("Testing drag (simulated)...")
         # 1. Move to start
-        executor.execute({"action_type": "move", "point_id": "G-00-00"}, mock_map)
+        executor.execute({"action_type": "move", "point_id": "L-00-00"}, mock_map)
         # 2. Mouse down
         result = executor.execute({"action_type": "mouse_down", "button": "left"}, mock_map)
         print(result)
         # 3. Move to end
-        executor.execute({"action_type": "move", "point_id": "L-00-00"}, mock_map)
+        executor.execute({"action_type": "move", "point_id": "L-00-01"}, mock_map)
         # 4. Mouse up
         result = executor.execute({"action_type": "mouse_up", "button": "left"}, mock_map)
         print(result)
 
         # Test scroll
         print("Testing scroll...")
-        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "line"}, mock_map)
+        result = executor.execute({"action_type": "scroll", "direction": "up", "amount": "line"}, mock_map)
         print(result)
 
         # Test hotkey
