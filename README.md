@@ -1,17 +1,24 @@
-# 👁️ Iris: The Autonomous Desktop Agent
-
-> **Your AI-powered hands and eyes for desktop automation.**  
-> *Visual Perception • Self-Correcting • Infinite Memory*
+# 👁️ Iris: Lightweight Autonomous Desktop GuiAgent
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)](https://www.python.org/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+> **Your AI-powered hands and eyes for desktop automation.**  
+
+*Lightweight • Minimal Code • Minimal Dependencies*
+
+*Visual Perception • Self-Correcting • Infinite Memory*
 
 ---
 
 ## 🚀 What is Iris?
 
 **Iris** is an intelligent agent designed to navigate your operating system just like a human does. It doesn't just blindly run scripts; it **sees** the screen, **thinks** about what to do, and **acts** with precision.
+
+Iris is **lightweight**, with **minimal code** and **dependencies**, requiring only a **single API key**. Yet, it packs a punch with:
+*   **Visual Perception** 👁️
+*   **Self-Correcting** 🛡️
+*   **Infinite Memory** 🧠
 
 Powered by a robust **ReAct (Reasoning + Acting)** loop, Iris can handle complex workflows, recover from errors, and remember context over long periods thanks to its hierarchical memory system.
 
@@ -23,19 +30,19 @@ Iris operates on a cycle of **Observation**, **Reasoning**, **Action**, and **Re
 
 ```mermaid
 graph TD
-    User[👤 User Task] --> Agent
+    User["👤 User Task"] --> Agent
     
     subgraph "Iris Agent 🤖"
-        Agent[🧠 Brain (Agent.py)]
-        Memory[📚 Hierarchical Memory]
+        Agent["🧠 Brain (Agent.py)"]
+        Memory["📚 Hierarchical Memory"]
         
         subgraph "Perception & Action 🛠️"
-            Vision[👁️ Vision Perceptor]
-            Executor[⚡ Action Executor]
+            Vision["👁️ Vision Perceptor"]
+            Executor["⚡ Action Executor"]
         end
     end
     
-    Environment[🖥️ Desktop Environment]
+    Environment["🖥️ Desktop Environment"]
     
     Agent <--> Memory
     Agent -- "1. Capture State" --> Vision
