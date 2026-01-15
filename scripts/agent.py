@@ -10,6 +10,11 @@ from scripts.tools import VisionPerceptor, ActionExecutor
 
 class IrisAgent:
     def __init__(self, task_description):
+        try:
+            width, height = pyautogui.size()
+        except:
+            width, height = 1920, 1080 # Fallback
+
         self.system_prompt = """
 ## Role
 You are Iris, an advanced AI desktop automation assistant designed to autonomously complete complex tasks on a computer. You act as the user's hands and eyes, navigating the operating system and applications with precision and intelligence.
@@ -27,7 +32,11 @@ Your primary goal is to fulfill the user's request by executing a sequence of mo
 1.  **Observe**: Carefully analyze the Global View to locate target elements. Then, examine the Local View to confirm if the mouse cursor is correctly positioned over the intended target.
 2.  **Reason**:
     -   Analyze the current state relative to the user's goal.
-    -   Verify cursor position using the Local View. If the cursor is not exactly over the target, you MUST issue a `move` action first.
+    -   **Localization Strategy**: You must strictly follow one of these three cases for positioning:
+        1.  **Target in Global View ONLY**: If the target is visible in the Global View but NOT in the Local View, use the Global View's grid to estimate the target's coordinates. Move to this estimated position.
+        2.  **Target in Local View**: If the target is visible in the Local View but the mouse is not on it, use the Local View's four corner coordinates and the current mouse position to precisely calculate the target's coordinates. Move to this calculated position.
+        3.  **Target Aligned**: If the mouse is already correctly positioned over the target in the Local View, DO NOT perform unnecessary moves. Proceed with the interaction (click, type, etc.).
+    -   **Calculation**: When moving, you MUST explicitly use the grid points, Local View corner coordinates, and current mouse coordinates to infer the target's exact coordinates. Emphasize calculation accuracy to avoid invalid or inaccurate moves.
     -   Formulate a plan for the immediate next step.
     -   Explicitly state your reasoning process before generating the action block.
 3.  **Act**: Output a single JSON action block representing the next operation.
@@ -108,6 +117,9 @@ Reasoning...
 -   **Precision Matters**: Always prioritize accuracy. If you are unsure about the cursor position, use a `move` action to reset or correct it.
 -   **Visual Verification**: Never assume the cursor is in the right place without checking the Local View.
 -   **Coordinate System**: Coordinates are absolute (x, y) based on the Global View resolution.
+""" + f"""
+-   **Screen Resolution**: {width}x{height}
+-   **Screen Corners**: Top-Left(0,0), Top-Right({width},0), Bottom-Left(0,{height}), Bottom-Right({width},{height})
 """
         self.memory = HierarchicalMemory(self.system_prompt, task_description)
         self.vision = VisionPerceptor()
@@ -137,22 +149,20 @@ Reasoning...
             pre_capture_callback()
             
         log("👀 Capturing screen...")
-        global_image, local_image = self.vision.capture_state()
+        global_image, local_image, local_bbox, mouse_xy = self.vision.capture_state()
+        left, top, right, bottom = local_bbox
+        mouse_x, mouse_y = mouse_xy
         
         if post_capture_callback:
             post_capture_callback()
         
         # 2. 构建 Context
-        try:
-            mouse_x, mouse_y = pyautogui.position()
-        except:
-            mouse_x, mouse_y = 0, 0
-            
         query = f"""## Current Step
 1. Analyze the Global View to understand the overall screen layout.
 2. Analyze the Local View to verify the precise mouse position.
 3. Current Mouse Position: ({mouse_x}, {mouse_y})
-4. Based on the task history and current visual state, determine the next action.
+4. Local View Area: Top-Left({left}, {top}), Bottom-Right({right}, {bottom})
+5. Based on the task history and current visual state, determine the next action.
 """
         log(f"❓ Query: {query}")
         messages = self.memory.get_full_context(query, images=(global_image, local_image))

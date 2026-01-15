@@ -59,15 +59,15 @@ class VisionPerceptor:
             
         return image
 
-    def _draw_mouse(self, image, x, y):
+    def _draw_mouse(self, image, x, y, local_x, local_y):
         draw = ImageDraw.Draw(image)
         # 绘制一个简单的箭头或标记来表示鼠标位置
         # 这里画一个以 (x,y) 为中心的十字或者圆圈，文档说是“醒目颜色的箭头”
         # 为了简单且清晰，我们画一个带边框的圆圈和十字
         r = 15
-        draw.ellipse((x-r, y-r, x+r, y+r), outline=GRID_COLOR, width=MOUSE_WIDTH)
-        draw.line((x-r, y, x+r, y), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
-        draw.line((x, y-r, x, y+r), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
+        draw.ellipse((local_x-r, local_y-r, local_x+r, local_y+r), outline=GRID_COLOR, width=MOUSE_WIDTH)
+        draw.line((local_x-r, local_y, local_x+r, local_y), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
+        draw.line((local_x, local_y-r, local_x, local_y+r), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
         
         # 在鼠标的标签下面标出左边（x,y）
         try:
@@ -83,8 +83,8 @@ class VisionPerceptor:
         text_height = bbox[3] - bbox[1]
         
         # 默认位置：鼠标下方居中
-        text_x = x - text_width // 2
-        text_y = y + r + 5
+        text_x = local_x - text_width // 2
+        text_y = local_y + r + 5
         
         # 边界检查与调整
         img_width, img_height = image.size
@@ -138,6 +138,69 @@ class VisionPerceptor:
         
         return image
 
+    def _draw_corners(self, image, left, top, right, bottom):
+        draw = ImageDraw.Draw(image)
+        width, height = image.size
+        
+        try:
+            font = ImageFont.truetype("arial.ttf", 20)
+        except IOError:
+            font = ImageFont.load_default()
+            
+        corners = [
+            (0, 0, f"x={left}\ny={top}", 'left', 'top'),
+            (width, 0, f"x={right}\ny={top}", 'right', 'top'),
+            (0, height, f"x={left}\ny={bottom}", 'left', 'bottom'),
+            (width, height, f"x={right}\ny={bottom}", 'right', 'bottom')
+        ]
+        
+        # Ensure RGBA for transparency
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+        
+        for x, y, text, anchor_x, anchor_y in corners:
+            # Re-create draw object for the current image state
+            draw = ImageDraw.Draw(image)
+            
+            # Calculate text size
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+            
+            # Determine position
+            padding = 4
+            if anchor_x == 'left':
+                draw_x = x + padding
+            else:
+                draw_x = x - text_w - padding
+                
+            if anchor_y == 'top':
+                draw_y = y + padding
+            else:
+                draw_y = y - text_h - padding
+                
+            # Draw background
+            overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+            overlay_draw = ImageDraw.Draw(overlay)
+            
+            bg_bbox = (
+                draw_x - 2,
+                draw_y - 2,
+                draw_x + text_w + 2,
+                draw_y + text_h + 2
+            )
+            overlay_draw.rectangle(bg_bbox, fill=(255, 255, 255, 180))
+            image = Image.alpha_composite(image, overlay)
+            
+            # Draw text
+            draw = ImageDraw.Draw(image)
+            draw.text((draw_x, draw_y), text, fill="black", font=font)
+            
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+            
+        return image
+
     def capture_state(self):
         # 获取屏幕截图和鼠标位置
         try:
@@ -152,7 +215,7 @@ class VisionPerceptor:
         # 1. 生成全局视图 (Global View)
         global_image = screenshot.copy()
         global_image = self._draw_grid(global_image)
-        global_image = self._draw_mouse(global_image, mouse_x, mouse_y)
+        global_image = self._draw_mouse(global_image, mouse_x, mouse_y, mouse_x, mouse_y)
 
         # 2. 生成局部视图 (Local View)
         # 以鼠标为中心裁剪
@@ -173,7 +236,10 @@ class VisionPerceptor:
         # 鼠标在局部图中的相对坐标
         local_mouse_x = mouse_x - left
         local_mouse_y = mouse_y - top
-        local_image = self._draw_mouse(local_image, local_mouse_x, local_mouse_y)
+        local_image = self._draw_mouse(local_image, mouse_x, mouse_y, local_mouse_x, local_mouse_y)
+        
+        # 绘制局部视图的4个顶点坐标
+        local_image = self._draw_corners(local_image, left, top, right, bottom)
 
         # Debug 存档
         if DEBUG_MODE:
@@ -184,7 +250,7 @@ class VisionPerceptor:
             local_image.save(local_path)
             # print(f"Debug images saved: {global_path}, {local_path}")
 
-        return global_image, local_image
+        return global_image, local_image, (left, top, right, bottom), (mouse_x, mouse_y)
 
 
 class ActionExecutor:
@@ -288,8 +354,8 @@ if __name__ == "__main__":
     try:
         print("Testing VisionPerceptor...")
         vision = VisionPerceptor()
-        global_img, local_img = vision.capture_state()
-        print(f"Capture successful. Global size: {global_img.size}, Local size: {local_img.size}")
+        global_img, local_img, bbox, mouse_xy = vision.capture_state()
+        print(f"Capture successful. Global size: {global_img.size}, Local size: {local_img.size}, BBox: {bbox}, Mouse position: {mouse_xy}")
     except Exception as e:
         print(f"VisionPerceptor test failed: {e}")
 
