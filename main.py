@@ -38,7 +38,7 @@ class IrisController:
             self.last_esc_time = current_time
             
             if self.esc_count >= 3:
-                print_boxed("Emergency Stop Triggered!")
+                print_boxed("Stop Triggered!")
                 self.running = False
                 self.window.safe_quit()
                 os._exit(0) # Force exit
@@ -92,8 +92,11 @@ class IrisController:
             self.log("\nTask finished.")
             if final_feedback:
                 print_boxed(f"Final Result:\n{final_feedback}")
-            # Do not exit automatically when task finishes, keep window to view logs
-            # If automatic exit is needed, self.window.safe_quit() can be called here
+            
+            # Ensure window is visible and prompt for exit
+            self.window.safe_unhide()
+            self.log("\nPress ESC 3 times to exit the program.")
+            print_boxed("Task finished. Press ESC 3 times to exit.")
 
     def start(self):
         self.window.start_loop()
@@ -101,8 +104,8 @@ class IrisController:
 def print_banner():
     print(logo.strip())
     instructions = """
-> Enter the task (line breaks are supported)
-> After entering the task, type [START] and press Enter to start.
+Enter the task (line breaks are supported)
+After entering the task, type [START] and press Enter to start.
 """
     print_boxed(instructions)
 
@@ -126,7 +129,7 @@ def get_multiline_input():
     return "\n".join(lines)
 
 def wait_with_countdown(seconds):
-    print_boxed(f"> You have {seconds} seconds to set the screen to the task start state. If you press Enter, the task will start immediately.")
+    print_boxed(f"You have {seconds} seconds to set the screen to the task start state. If you press Enter, the task will start immediately.")
     
     start_time = time.time()
     while time.time() - start_time < seconds:

@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 import queue
+import unicodedata
 
 logo = """
 ██╗██████╗ ██╗███████╗
@@ -11,12 +12,40 @@ logo = """
 ╚═╝╚═╝  ╚═╝╚═╝╚══════╝
 """
 
+def get_display_width(text):
+    """
+    Calculate the display width of the string.
+    Full-width (F) and Wide (W) characters count as 2.
+    Other characters count as 1.
+    """
+    width = 0
+    for char in text:
+        # 'W' = Wide, 'F' = Fullwidth
+        # 'A' = Ambiguous (treated as 1 here)
+        if unicodedata.east_asian_width(char) in ('F', 'W'):
+            width += 2
+        else:
+            width += 1
+    return width
+
 def print_boxed(text):
     lines = text.strip().split('\n')
-    max_len = max(len(line) for line in lines)
+    
+    # 1. Calculate the visual width for each line and find the maximum
+    lines_widths = [get_display_width(line) for line in lines]
+    max_len = max(lines_widths)
+    
+    # Print top border
     print("╭" + "─" * (max_len + 2) + "╮")
-    for line in lines:
-        print(f"│ {line.ljust(max_len)} │")
+    
+    # Print content
+    for line, width in zip(lines, lines_widths):
+        # Key point: ljust cannot be used directly because it pads based on character count,
+        # not visual width. We must calculate the required padding spaces manually.
+        padding = " " * (max_len - width)
+        print(f"│ {line}{padding} │")
+        
+    # Print bottom border
     print("╰" + "─" * (max_len + 2) + "╯")
 
 class DisplayWindow:
