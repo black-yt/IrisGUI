@@ -54,7 +54,6 @@ class DisplayWindow:
         self.BG_COLOR = "#FFFACD"    # Light yellow
         self.TEXT_BG = "#FFFACD"
         self.FG_COLOR = "#000000"    # Black text
-        self.CURSOR_COLOR = "#000000"
         self.FONT_STYLE = ("Arial", 12)
         
         # --- 2. Initialize Window ---

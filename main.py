@@ -1,9 +1,7 @@
 import threading
 import time
 import os
-import argparse
 import sys
-import msvcrt
 from pynput import keyboard
 from scripts.agent import IrisAgent
 from scripts.utils import DisplayWindow, print_boxed, logo
@@ -131,22 +129,33 @@ def get_multiline_input():
 def wait_with_countdown(seconds):
     print_boxed(f"You have {seconds} seconds to set the screen to the task start state. If you press Enter, the task will start immediately.")
     
+    stop_event = threading.Event()
+    
+    def on_press(key):
+        if key == keyboard.Key.enter:
+            stop_event.set()
+            return False # Stop listener
+
+    # Start a non-blocking listener
+    listener = keyboard.Listener(on_press=on_press)
+    listener.start()
+    
     start_time = time.time()
     while time.time() - start_time < seconds:
-        # Check for key press
-        if msvcrt.kbhit():
-            key = msvcrt.getch()
-            if key == b'\r' or key == b'\n':
-                print_boxed("Enter detected, starting task immediately!")
-                return
-            # Consume other keys or ignore
+        if stop_event.is_set():
+            print_boxed("Enter detected, starting task immediately!")
+            if listener.is_alive():
+                listener.stop()
+            return
         
         # Print countdown (optional, but good for UX)
-        remaining = int(seconds - (time.time() - start_time))
+        # remaining = int(seconds - (time.time() - start_time))
         # sys.stdout.write(f"\rTime remaining: {remaining} seconds...")
         # sys.stdout.flush()
         time.sleep(0.1)
     
+    if listener.is_alive():
+        listener.stop()
     print_boxed("Time is up, starting task!")
 
 if __name__ == "__main__":
