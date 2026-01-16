@@ -45,10 +45,11 @@ Iris operates on a cycle of **Observation**, **Reasoning**, **Action**, and **Re
 
 ```mermaid
 graph TD
-    User["👤 User Task"] --> Agent
+    User["👤 User Task"]
     
     subgraph "Iris Agent 🤖"
         Agent["🧠 Brain (Agent.py)"]
+        Parser["🔍 Action Parser"]
         Memory["📚 Hierarchical Memory"]
         
         subgraph "Perception & Action 🛠️"
@@ -56,19 +57,22 @@ graph TD
             Executor["⚡ Action Executor"]
         end
     end
-    
+
     Environment["🖥️ Desktop Environment"]
     
-    Agent <--> Memory
-    Agent -- "1. Capture State" --> Vision
-    Vision -- "Screenshot + Grid" --> Environment
-    Vision -- "Global & Local Views" --> Agent
+    User -- "Query" --> Agent
+    Agent -- "Result" --> User
     
-    Agent -- "2. Reason & Plan" --> Agent
-    
-    Agent -- "3. Execute Action" --> Executor
+    Agent -- "Add" --> Memory
+    Memory -- "Get" --> Agent
+
+    Memory -- "Compress" --> Memory
+
+    Agent -- "Reasoning & Action" --> Parser
+    Parser -- "Action" --> Executor
     Executor -- "Mouse/Keyboard" --> Environment
-    Executor -- "Feedback" --> Agent
+    Environment -- "Screenshot" --> Vision
+    Vision -- "Global & Local Views" --> Agent
 ```
 
 ---
