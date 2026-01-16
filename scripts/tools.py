@@ -6,7 +6,7 @@ from scripts.config import *
 import pyautogui
 import pyperclip
 
-# 设置 pyautogui 的一些安全参数
+# Set some safety parameters for pyautogui
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.1
 
@@ -20,8 +20,8 @@ class VisionPerceptor:
 
     def _draw_mouse(self, image, local_x, local_y, r=8):
         draw = ImageDraw.Draw(image)
-        # 绘制一个简单的箭头或标记来表示鼠标位置
-        # 这里画一个以 (x,y) 为中心的十字或者圆圈
+        # Draw a simple arrow or marker to represent mouse position
+        # Here draw a cross or circle centered at (x,y)
         draw.ellipse((local_x-r, local_y-r, local_x+r, local_y+r), outline=GRID_COLOR, width=MOUSE_WIDTH)
         draw.line((local_x-r, local_y, local_x+r, local_y), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
         draw.line((local_x, local_y-r, local_x, local_y+r), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
@@ -117,7 +117,7 @@ class VisionPerceptor:
         if self.pre_callback:
             self.pre_callback()
 
-        # 获取屏幕截图和鼠标位置
+        # Capture screenshot and mouse position
         try:
             screenshot = pyautogui.screenshot()
             mouse_x, mouse_y = pyautogui.position()
@@ -132,7 +132,7 @@ class VisionPerceptor:
             screenshot = Image.new('RGB', (1920, 1080), color='black')
             mouse_x, mouse_y = 0, 0
 
-        # 1. 生成全局视图 (Global View)
+        # 1. Generate Global View
         # Global view uses GRID_STEP and prefix 'G'
         global_image_raw = screenshot.copy()
         
@@ -141,8 +141,8 @@ class VisionPerceptor:
         # Draw mouse on global view
         self._draw_mouse(global_image, mouse_x, mouse_y, r=16)
         
-        # 2. 生成局部视图 (Local View)
-        # 以鼠标为中心裁剪
+        # 2. Generate Local View
+        # Crop centered on mouse
         crop_half = CROP_SIZE // 2
         left = max(0, mouse_x - crop_half)
         top = max(0, mouse_y - crop_half)
@@ -164,7 +164,7 @@ class VisionPerceptor:
         # Merge maps
         full_coordinate_map = {**global_map, **local_map}
 
-        # Debug 存档
+        # Debug archive
         if DEBUG_MODE:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             global_path = os.path.join(self.debug_dir, f"global_{timestamp}.png")
@@ -332,7 +332,7 @@ if __name__ == "__main__":
 
         # Test type (Non-ASCII)
         print("Testing type (Non-ASCII)...")
-        result = executor.execute({"action_type": "type", "text": "徐望瀚"}, mock_map)
+        result = executor.execute({"action_type": "type", "text": "你好"}, mock_map)
         print(result)
 
         # Test drag (simulated)

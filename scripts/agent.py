@@ -156,12 +156,12 @@ Reasoning...
 
         log(f"\n➖➖➖➖➖➖➖➖➖➖ Step {self.step_count} ➖➖➖➖➖➖➖➖➖➖")
 
-        # 1. 感知
+        # 1. Perception
         log("👀 Capturing screen...")
         # Updated to unpack coordinate_map
         global_image, local_image, coordinate_map = self.vision.capture_state()
         
-        # 2. 构建 Context
+        # 2. Build Context
         query = f"""## Current Step
 1. Analyze the Global View to understand the overall screen layout.
 2. Analyze the Local View to verify the precise mouse position (marked with a crosshair). **Note: This view reflects the state AFTER the previous action. The crosshair marks where the mouse is CURRENTLY located.**
@@ -170,7 +170,7 @@ Reasoning...
         log(f"❓ Query: {query}")
         messages = self.memory.get_full_context(query, images=(global_image, local_image))
 
-        # 3. 推理 (Stream)
+        # 3. Reasoning (Stream)
         log("🧠 Thinking...")
         full_response = ""
         action_block = None
@@ -193,32 +193,32 @@ Reasoning...
                         log_callback(content)
                     full_response += content
                     
-                    # 4. 流式解析 (Parser) & 中断机制
-                    # 检查是否包含完整的 <action>...</action>
+                    # 4. Stream Parsing & Interruption Mechanism
+                    # Check if complete <action>...</action> is included
                     match = re.search(r'<action>(.*?)</action>', full_response, re.DOTALL)
                     if match:
                         action_block = match.group(1)
-                        # 中断流
+                        # Interrupt stream
                         stream.close() 
                         break
             
-            log("", end="\n") # 换行
+            log("", end="\n") # Newline
 
         except Exception as e:
             log(f"❌ Error during LLM inference: {e}")
             return f"Error: {e}"
 
-        # 5. Action 解析与修复
+        # 5. Action Parsing & Repair
         feedback = ""
         if action_block:
             try:
-                # 尝试修复和解析 JSON
+                # Attempt to repair and parse JSON
                 action_json_str = repair_json(action_block)
                 action_dict = json.loads(action_json_str)
                 
                 log(f"⚡ Executing Action: {action_dict}")
                 
-                # 6. 执行
+                # 6. Execution
                 # Pass coordinate_map to executor
                 feedback = self.executor.execute(action_dict, coordinate_map)
                 log(f"✅ Feedback: {feedback}")
@@ -230,7 +230,7 @@ Reasoning...
             feedback = "Error: No valid <action> block found in response."
             log(f"❌ {feedback}")
 
-        # 7. 记忆
+        # 7. Memory
         self.memory.add_step("assistant", full_response, log_callback=log)
         self.memory.add_step("user", f"Execution Result: {feedback}", log_callback=log)
         
@@ -240,7 +240,7 @@ if __name__ == "__main__":
     # python -m scripts.agent
     print("Testing IrisAgent...")
     try:
-        # 简单的实例化测试
+        # Simple instantiation test
         agent = IrisAgent("Test Task")
         print("IrisAgent instantiated successfully.")
         print("Note: To run a full step, valid API keys and environment are required.")

@@ -19,17 +19,17 @@ class HierarchicalMemory:
 
     def add_step(self, role, content, log_callback=None):
         """
-        将新的一步加入 short_memory_layer。只记录文本步骤和执行结果。
+        Add a new step to short_memory_layer. Only record text steps and execution results.
         """
         self.short_memory_layer.append({"role": role, "content": content})
         
-        # 检查是否需要压缩
+        # Check if compression is needed
         if len(self.short_memory_layer) >= MAX_SHORT_MEMORY:
             self.compress_context(log_callback)
 
     def compress_memory(self, memory_list, prompt, max_tokens=None):
         """
-        使用 LLM 压缩记忆列表。
+        Compress memory list using LLM.
         """
         messages_for_summary = [{"role": "system", "content": """
 ## Role
@@ -45,7 +45,7 @@ Your task is to compress the agent's operational history into concise summaries.
 - Maintain chronological order.
 """}]
         
-        # 将步骤转换为文本格式供总结
+        # Convert steps to text format for summary
         text_content = ""
         for step in memory_list:
             if "role" in step:
@@ -64,7 +64,7 @@ Your task is to compress the agent's operational history into concise summaries.
 
     def compress_context(self, log_callback=None):
         """
-        当 short_memory_layer 长度达到上限时触发压缩。
+        Trigger compression when short_memory_layer length reaches the limit.
         """
         def log(msg):
             if log_callback:
@@ -74,8 +74,8 @@ Your task is to compress the agent's operational history into concise summaries.
 
         log("⏳ Compressing short memory...")
 
-        # 1. 压缩 Short Memory -> Long Memory
-        # 取出最早的 COMPRESSION_RATIO 步
+        # 1. Compress Short Memory -> Long Memory
+        # Take out the earliest COMPRESSION_RATIO steps
         steps_to_compress = self.short_memory_layer[:COMPRESSION_RATIO]
         self.short_memory_layer = self.short_memory_layer[COMPRESSION_RATIO:]
         
@@ -92,21 +92,21 @@ Summarize the provided interaction logs into a brief paragraph.
                 max_tokens=None
             )
             
-            # 将总结追加到 long_memory_layer
+            # Append summary to long_memory_layer
             self.long_memory_layer.append({"role": "assistant", "content": f"History Summary: {summary}"})
             log(f"✅ Short memory compressed. Summary: {summary[:100]}...")
             
         except Exception as e:
             log(f"❌ Error compressing short memory: {e}")
-            # 如果失败，可能需要把未压缩的放回去或者保留
-            # 这里简单处理：打印错误，不丢失数据（放回）
+            # If failed, maybe put back the uncompressed ones or keep them
+            # Simple handling here: print error, do not lose data (put back)
             self.short_memory_layer = steps_to_compress + self.short_memory_layer
             return
 
-        # 2. 检查 Long Memory 是否需要压缩
+        # 2. Check if Long Memory needs compression
         if len(self.long_memory_layer) >= MAX_LONG_MEMORY:
             log("⏳ Compressing long memory...")
-            # 压缩 Long Memory
+            # Compress Long Memory
             long_memories_to_compress = self.long_memory_layer[:COMPRESSION_RATIO]
             self.long_memory_layer = self.long_memory_layer[COMPRESSION_RATIO:]
             
@@ -136,8 +136,8 @@ Consolidate the following historical summaries into a single high-level overview
 
     def get_full_context(self, query, images=None):
         """
-        按顺序拼接：Fixed -> Long Term -> Short Term -> query。
-        返回符合 OpenAI 格式的 messages 列表。
+        Concatenate in order: Fixed -> Long Term -> Short Term -> query.
+        Return messages list in OpenAI format.
         """
         messages = []
         
@@ -155,7 +155,7 @@ Consolidate the following historical summaries into a single high-level overview
         
         if images:
             global_img, local_img = images
-            # 编码图片
+            # Encode images
             global_base64 = self._encode_image(global_img)
             local_base64 = self._encode_image(local_img)
             
@@ -192,7 +192,7 @@ if __name__ == "__main__":
         context = memory.get_full_context("Next step?")
         print(f"Context retrieved. Message count: {len(context)}")
         
-        # 简单的验证
+        # Simple verification
         assert len(context) == 5 # 2 fixed + 2 short + 1 query
         print("Basic logic verification passed.")
 

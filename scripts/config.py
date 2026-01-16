@@ -1,40 +1,40 @@
 import os
 from dotenv import load_dotenv
 
-# 加载 .env 文件
+# Load .env file
 load_dotenv()
 
 # ===========================
-# 模型参数
+# Model Parameters
 # ===========================
-# 建议使用 gpt-4o 或 gpt-5.1 等强视觉模型
+# Recommended to use strong vision models like gpt-4o or gpt-5.1
 LLM_API_ENDPOINT = os.getenv("LLM_API_ENDPOINT")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME")
 
 # ===========================
-# 视觉参数
+# Vision Parameters
 # ===========================
-GRID_STEP = int(os.getenv("GRID_STEP", 100))          # 全局网格线的间距，单位像素
-LOCAL_GRID_STEP = int(os.getenv("LOCAL_GRID_STEP", 30)) # 局部细网格线的间距
-CROP_SIZE = int(os.getenv("CROP_SIZE", 500))          # 局部截图的宽高，单位像素
-GRID_COLOR = os.getenv("GRID_COLOR", "red")           # 网格标记的颜色
-GRID_WIDTH = int(os.getenv("GRID_WIDTH", 1))          # 网格标记的线宽
-MOUSE_COLOR = os.getenv("MOUSE_COLOR", "blue")        # 鼠标标记的颜色
-MOUSE_WIDTH = int(os.getenv("MOUSE_WIDTH", 5))        # 鼠标标记的线宽
+GRID_STEP = int(os.getenv("GRID_STEP", 100))          # Global grid line spacing, in pixels
+LOCAL_GRID_STEP = int(os.getenv("LOCAL_GRID_STEP", 30)) # Local fine grid line spacing
+CROP_SIZE = int(os.getenv("CROP_SIZE", 500))          # Local screenshot width/height, in pixels
+GRID_COLOR = os.getenv("GRID_COLOR", "red")           # Grid marker color
+GRID_WIDTH = int(os.getenv("GRID_WIDTH", 1))          # Grid marker line width
+MOUSE_COLOR = os.getenv("MOUSE_COLOR", "blue")        # Mouse marker color
+MOUSE_WIDTH = int(os.getenv("MOUSE_WIDTH", 5))        # Mouse marker line width
 
 # ===========================
-# 运行参数
+# Runtime Parameters
 # ===========================
-MAX_STEPS = int(os.getenv("MAX_STEPS", 100))          # 单次任务最大步数防止死循环
-DEBUG_MODE = os.getenv("DEBUG_MODE", "True").lower() == "true" # 是否保存截图到本地
+MAX_STEPS = int(os.getenv("MAX_STEPS", 100))          # Max steps per task to prevent infinite loops
+DEBUG_MODE = os.getenv("DEBUG_MODE", "True").lower() == "true" # Whether to save screenshots locally
 
 # ===========================
-# 记忆参数
+# Memory Parameters
 # ===========================
-MAX_LONG_MEMORY = int(os.getenv("MAX_LONG_MEMORY", 10))     # 最大的长记忆数量
-MAX_SHORT_MEMORY = int(os.getenv("MAX_SHORT_MEMORY", 10))    # 最大的短记忆数量
-COMPRESSION_RATIO = int(os.getenv("COMPRESSION_RATIO", 5))    # 每5条消息压缩为1条
+MAX_LONG_MEMORY = int(os.getenv("MAX_LONG_MEMORY", 10))     # Max long-term memory count
+MAX_SHORT_MEMORY = int(os.getenv("MAX_SHORT_MEMORY", 10))    # Max short-term memory count
+COMPRESSION_RATIO = int(os.getenv("COMPRESSION_RATIO", 5))    # Compress every 5 messages into 1
 
 if __name__ == "__main__":
     # python -m scripts.config

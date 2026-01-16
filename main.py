@@ -1,51 +1,36 @@
-import tkinter as tk
-from tkinter import scrolledtext
 import threading
 import time
 import os
 import argparse
 import sys
+import msvcrt
 from pynput import keyboard
 from scripts.agent import IrisAgent
-from scripts.config import DEBUG_MODE
+from scripts.utils import DisplayWindow, print_boxed, logo
 
-class IrisGUI:
+
+class IrisController:
     def __init__(self, task):
-        self.root = tk.Tk()
-        self.root.title("Iris Agent (Debug Mode)")
-        # 设置全屏
-        self.root.state('zoomed')
-        
         self.task = task
-        
-        # 日志显示 - 增加高度和宽度以适应全屏
-        self.log_area = scrolledtext.ScrolledText(self.root, width=150, height=40)
-        self.log_area.pack(pady=10, fill=tk.BOTH, expand=True)
-        
-        self.agent = None
+        self.window = DisplayWindow()
         self.running = False
         self.esc_count = 0
         self.last_esc_time = 0
 
-        # 监听 ESC 键
+        # Listen for ESC key (global listener, ensures response even if window is hidden)
         self.listener = keyboard.Listener(on_press=self.on_key_press)
         self.listener.start()
         
-        # 自动开始任务
-        self.root.after(100, self.start_agent_thread)
+        # Automatically start task
+        self.window.root.after(100, self.start_agent_thread)
 
     def log(self, message):
-        # 使用 after 方法在主线程中更新 UI
-        self.root.after(0, self._update_log, message)
-
-    def _update_log(self, message):
-        self.log_area.insert(tk.END, message)
-        self.log_area.see(tk.END)
+        self.window.log(message)
 
     def on_key_press(self, key):
         if key == keyboard.Key.esc:
             current_time = time.time()
-            if current_time - self.last_esc_time < 1.0: # 1秒内连续按
+            if current_time - self.last_esc_time < 1.0: # Consecutive press within 1 second
                 self.esc_count += 1
             else:
                 self.esc_count = 1
@@ -53,10 +38,10 @@ class IrisGUI:
             self.last_esc_time = current_time
             
             if self.esc_count >= 3:
-                self.log("Emergency Stop Triggered!")
+                print_boxed("Emergency Stop Triggered!")
                 self.running = False
-                self.root.quit()
-                os._exit(0) # 强制退出
+                self.window.safe_quit()
+                os._exit(0) # Force exit
 
     def start_agent_thread(self):
         if self.running:
@@ -64,7 +49,7 @@ class IrisGUI:
             
         self.running = True
         
-        # 在新线程中运行 Agent
+        # Run Agent in a new thread
         thread = threading.Thread(target=self.run_agent, args=(self.task,))
         thread.daemon = True
         thread.start()
@@ -73,19 +58,24 @@ class IrisGUI:
         self.log(f"Starting task: {task}")
         try:
             def pre_callback():
-                # 截图前隐藏窗口
-                self.root.withdraw()
-                time.sleep(0.5) # 等待窗口隐藏
+                # Hide window before screenshot
+                self.window.safe_hide()
+                time.sleep(0.5) # Wait for window to hide
 
             def post_callback():
-                # 截图后恢复窗口
-                self.root.deiconify()
-                self.root.state('zoomed')
+                # Restore window after screenshot
+                # Note: DisplayWindow.show() automatically deiconifies,
+                # but if there is no log output between steps, the window might remain hidden.
+                # It is better to explicitly restore it here, or let it remain hidden until there is a new log?
+                # The original logic was to restore the window, so we restore it here too.
+                self.window.safe_unhide()
 
+            # Use DisplayWindow regardless of DEBUG_MODE
+            # DEBUG_MODE only affects internal logic like saving screenshots (controlled by scripts.config)
             self.agent = IrisAgent(task, pre_callback=pre_callback, post_callback=post_callback)
             
             while self.running:
-                # 执行一步，传入回调函数控制窗口显隐
+                # Execute one step
                 feedback = self.agent.step(
                     log_callback=self.log
                 )
@@ -96,73 +86,79 @@ class IrisGUI:
                 
         except Exception as e:
             self.log(f"Error: {e}")
+            print_boxed(f"Error: {e}") # Also print to console just in case
         finally:
             self.running = False
-            # 任务结束不自动退出，保留窗口查看日志
             self.log("\nTask finished.")
+            # Do not exit automatically when task finishes, keep window to view logs
+            # If automatic exit is needed, self.window.safe_quit() can be called here
 
     def start(self):
-        self.root.mainloop()
+        self.window.start_loop()
 
-def run_console_agent(task):
-    print(f"Starting task: {task}")
-    
-    running = True
-    esc_count = 0
-    last_esc_time = 0
+def print_banner():
+    print(logo.strip())
+    instructions = """
+> Enter the task (line breaks are supported)
+> After entering the task, type [START] and press Enter to start.
+"""
+    print_boxed(instructions)
 
-    def on_key_press(key):
-        nonlocal esc_count, last_esc_time, running
-        if key == keyboard.Key.esc:
-            current_time = time.time()
-            if current_time - last_esc_time < 1.0:
-                esc_count += 1
-            else:
-                esc_count = 1
-            
-            last_esc_time = current_time
-            
-            if esc_count >= 3:
-                print("\nEmergency Stop Triggered!")
-                running = False
-                os._exit(0)
-
-    listener = keyboard.Listener(on_press=on_key_press)
-    listener.start()
-
-    try:
-        # No pre/post callbacks needed for console mode as there is no window to hide
-        agent = IrisAgent(task)
-        
-        while running:
-            # agent.step already prints to stdout, so we don't need a log_callback that prints
-            feedback = agent.step()
-            
-            if "[Max Steps Reached]" in feedback or "[Task Completed]" in feedback:
-                running = False
+def get_multiline_input():
+    lines = []
+    while True:
+        try:
+            line = input()
+            if "[START]" in line:
+                # If [START] is in this line, keep the content before [START] (if any)
+                # Or simply consider this line as the end signal
+                # The requirement is "The user needs to enter the [START] symbol at the end to start the task"
+                # We can remove [START] and take the preceding part, or if [START] occupies a line alone, end it
+                parts = line.split("[START]")
+                if parts[0].strip():
+                    lines.append(parts[0])
                 break
-            
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        print("\nTask finished.")
+            lines.append(line)
+        except EOFError:
+            break
+    return "\n".join(lines)
+
+def wait_with_countdown(seconds):
+    print_boxed(f"> You have {seconds} seconds to set the screen to the task start state. If you press Enter, the task will start immediately.")
+    
+    start_time = time.time()
+    while time.time() - start_time < seconds:
+        # Check for key press
+        if msvcrt.kbhit():
+            key = msvcrt.getch()
+            if key == b'\r' or key == b'\n':
+                print_boxed("Enter detected, starting task immediately!")
+                return
+            # Consume other keys or ignore
+        
+        # Print countdown (optional, but good for UX)
+        remaining = int(seconds - (time.time() - start_time))
+        # sys.stdout.write(f"\rTime remaining: {remaining} seconds...")
+        # sys.stdout.flush()
+        time.sleep(0.1)
+    
+    print_boxed("Time is up, starting task!")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Iris Agent")
-    parser.add_argument("task", help="The task description")
-    
-    args = parser.parse_args()
-    
-    print("Waiting 5 seconds before starting task...")
-    time.sleep(5)
+    # Check if running in a headless environment (if GUI is needed)
+    if os.environ.get('DISPLAY', '') == '' and os.name != 'nt':
+        print_boxed('No display found. Cannot run GUI.')
+        sys.exit(1)
 
-    if DEBUG_MODE:
-        # 检查是否在无头环境中运行
-        if os.environ.get('DISPLAY', '') == '' and os.name != 'nt':
-            print('No display found. Cannot run in debug mode.')
-            sys.exit(1)
-            
-        app = IrisGUI(args.task)
-        app.start()
-    else:
-        run_console_agent(args.task)
+    print_banner()
+    
+    task_description = get_multiline_input()
+    
+    if not task_description.strip():
+        print_boxed("Task description is empty, exiting.")
+        sys.exit(0)
+        
+    wait_with_countdown(5)
+        
+    app = IrisController(task_description)
+    app.start()
