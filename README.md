@@ -94,7 +94,7 @@ graph TD
 
 * **Task**: 玩一局植物大战僵尸
 
-https://github.com/user-attachments/assets/067b6fb4-d242-4b4b-b4e1-696eb170c3d2
+https://github.com/user-attachments/assets/097baadc-e01f-441c-973d-f1260656d19a
 
 <br>
 
