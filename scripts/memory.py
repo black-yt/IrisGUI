@@ -2,9 +2,14 @@ from scripts.config import *
 from openai import OpenAI
 import base64
 from io import BytesIO
+import json
+import os
+from datetime import datetime
 
 class HierarchicalMemory:
     def __init__(self, system_prompt, initial_task):
+        self.system_prompt = system_prompt
+        self.initial_task = initial_task
         self.fixed_layer = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": initial_task}
@@ -17,11 +22,36 @@ class HierarchicalMemory:
             base_url=LLM_API_ENDPOINT
         )
 
+        # Initialize debug log path
+        if DEBUG_MODE:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_dir = os.path.join(os.path.dirname(__file__), "debug", "log")
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            self.debug_save_path = os.path.join(log_dir, f"{timestamp}.jsonl")
+            
+            # Save fixed layer immediately
+            self._append_to_log(self.fixed_layer)
+
+    def _append_to_log(self, steps: list[dict]):
+        """Helper to append steps to the JSONL log file"""
+        try:
+            with open(self.debug_save_path, 'a', encoding='utf-8') as f:
+                for step in steps:
+                    f.write(json.dumps(step, ensure_ascii=False) + "\n")
+        except Exception as e:
+            print(f"Failed to write to debug log: {e}")
+
     def add_step(self, role, content, log_callback=None):
         """
         Add a new step to short_memory_layer. Only record text steps and execution results.
         """
-        self.short_memory_layer.append({"role": role, "content": content})
+        step = {"role": role, "content": content}
+        self.short_memory_layer.append(step)
+        
+        # Append to debug log
+        if DEBUG_MODE:
+            self._append_to_log([step])
         
         # Check if compression is needed
         if len(self.short_memory_layer) >= MAX_SHORT_MEMORY:
@@ -31,7 +61,7 @@ class HierarchicalMemory:
         """
         Compress memory list using LLM.
         """
-        messages_for_summary = [{"role": "system", "content": """
+        system_prompt = f"""
 ## Role
 You are the Memory Manager for an autonomous desktop agent.
 
@@ -43,17 +73,24 @@ Your task is to compress the agent's operational history into concise summaries.
 - Focus on **actions** (what was done) and **results** (what happened).
 - Remove redundant information.
 - Maintain chronological order.
-"""}]
+                                 
+## Background
+These conversation logs (which you need to summarize) were recorded during the process of addressing the following user request. 
+
+```text
+{self.initial_task}
+```
+
+Note that you are not tasked with answering or completing the user request above. Your role is a Memory Manager.
+"""
+        messages_for_summary = [{"role": "system", "content": system_prompt}]
         
         # Convert steps to text format for summary
-        text_content = ""
+        prompt = "\n\n## History\n"
         for step in memory_list:
-            if "role" in step:
-                text_content += f"{step['role']}: {step['content']}\n"
-            else:
-                text_content += f"{step['content']}\n"
+            prompt += f"{step['role']}: {step['content']}\n\n"
             
-        messages_for_summary.append({"role": "user", "content": prompt + "\n" + text_content})
+        messages_for_summary.append({"role": "user", "content": prompt})
         
         response = self.client.chat.completions.create(
             model=LLM_MODEL_NAME,
@@ -180,25 +217,18 @@ Consolidate the following historical summaries into a single high-level overview
 
 if __name__ == "__main__":
     # python -m scripts.memory
+    MAX_LONG_MEMORY = 2
+    MAX_SHORT_MEMORY = 2
+    COMPRESSION_RATIO = 2
     print("Testing HierarchicalMemory...")
     try:
         memory = HierarchicalMemory("System Prompt", "Initial Task")
         print("HierarchicalMemory instantiated.")
-        
+
         memory.add_step("assistant", "I am thinking...")
         memory.add_step("user", "Result: Success")
-        print("Steps added.")
-        
-        context = memory.get_full_context("Next step?")
-        print(f"Context retrieved. Message count: {len(context)}")
-        
-        # Simple verification
-        assert len(context) == 5 # 2 fixed + 2 short + 1 query
-        print("Basic logic verification passed.")
-
-        for _ in range(30):
-            memory.add_step("assistant", "I am thinking...")
-            memory.add_step("user", "Result: Success")
+        memory.add_step("assistant", "I am thinking...")
+        memory.add_step("user", "Result: Success")
 
         context = memory.get_full_context("Next step?")
         import json

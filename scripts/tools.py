@@ -7,12 +7,12 @@ import pyautogui
 import pyperclip
 
 # Set some safety parameters for pyautogui
-pyautogui.FAILSAFE = True
+# pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.1
 
 class VisionPerceptor:
     def __init__(self, pre_callback=None, post_callback=None):
-        self.debug_dir = os.path.join(os.path.dirname(__file__), "debug")
+        self.debug_dir = os.path.join(os.path.dirname(__file__), "debug", "screenshot")
         if not os.path.exists(self.debug_dir):
             os.makedirs(self.debug_dir)
         self.pre_callback = pre_callback
@@ -192,6 +192,32 @@ class ActionExecutor:
             self.mouse_x, self.mouse_y = 0, 0
 
     def get_mouse_position(self):
+        """
+        Get the current tracked mouse position.
+        Verifies if the real mouse position matches the tracked position.
+        If not, attempts to correct it. If correction fails, raises an error.
+        """
+        TOLERANCE = 10 # pixels
+        
+        try:
+            real_x, real_y = pyautogui.position()
+            dist = ((real_x - self.mouse_x) ** 2 + (real_y - self.mouse_y) ** 2) ** 0.5
+            
+            if dist > TOLERANCE:
+                print(f"Warning: Mouse drift detected. Tracked: ({self.mouse_x}, {self.mouse_y}), Real: ({real_x}, {real_y}). Correcting...")
+                # Attempt to correct
+                pyautogui.moveTo(self.mouse_x, self.mouse_y)
+                
+                # Check again
+                real_x, real_y = pyautogui.position()
+                dist = ((real_x - self.mouse_x) ** 2 + (real_y - self.mouse_y) ** 2) ** 0.5
+                
+                if dist > TOLERANCE:
+                    raise Exception(f"Critical Error: Mouse position mismatch! Tracked: ({self.mouse_x}, {self.mouse_y}), Real: ({real_x}, {real_y}). Failed to correct.")
+                    
+        except pyautogui.PyAutoGUIException:
+            pass # Ignore if pyautogui fails to get position (e.g. headless)
+            
         return self.mouse_x, self.mouse_y
 
     def execute(self, action_dict, coordinate_map=None):
@@ -327,6 +353,13 @@ if __name__ == "__main__":
     try:
         print("Testing ActionExecutor...")
         executor = ActionExecutor()
+
+        # Test mouse correction
+        print("Testing mouse correction...")
+        time.sleep(3)
+        result = executor.get_mouse_position()
+        print(result)
+        
         # Mock map
         mock_map = {"L-00-00": (1000, 800), "L-00-01": (15, 15), "L-00-02": (500, 50)}
         

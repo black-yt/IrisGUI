@@ -72,6 +72,7 @@ class IrisController:
             # DEBUG_MODE only affects internal logic like saving screenshots (controlled by scripts.config)
             self.agent = IrisAgent(task, pre_callback=pre_callback, post_callback=post_callback)
             
+            final_feedback = None
             while self.running:
                 # Execute one step
                 feedback = self.agent.step(
@@ -80,6 +81,7 @@ class IrisController:
                 
                 if "[Max Steps Reached]" in feedback or "[Task Completed]" in feedback:
                     self.running = False
+                    final_feedback = feedback
                     break
                 
         except Exception as e:
@@ -88,6 +90,8 @@ class IrisController:
         finally:
             self.running = False
             self.log("\nTask finished.")
+            if final_feedback:
+                print_boxed(f"Final Result:\n{final_feedback}")
             # Do not exit automatically when task finishes, keep window to view logs
             # If automatic exit is needed, self.window.safe_quit() can be called here
 
