@@ -5,11 +5,7 @@
 ██║██████╔╝██║███████╗
 ██║██╔══██╗██║╚════██║
 ██║██║  ██║██║███████║
-╚═╝╚═╝  ╚═╝╚═╝╚══════╝
-  </pre>
-</div>
-
-<div align="center">
+╚═╝╚═╝  ╚═╝╚═╝╚══════╝</pre>
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)](https://www.python.org/)
@@ -21,7 +17,6 @@
 *Lightweight • Minimal Code • Minimal Dependencies 🍃*
 
 *Visual Perception • Self-Correcting • Infinite Memory 💪🏻*
-
 </div>
 
 
