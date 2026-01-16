@@ -1,22 +1,29 @@
-```text
+<div align="center">
+  <pre>
 ██╗██████╗ ██╗███████╗
 ██║██╔══██╗██║██╔════╝
 ██║██████╔╝██║███████╗
 ██║██╔══██╗██║╚════██║
 ██║██║  ██║██║███████║
 ╚═╝╚═╝  ╚═╝╚═╝╚══════╝
-```
+  </pre>
+</div>
+
+<div align="center">
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)](https://www.python.org/)
+<a href="https://arxiv.org/pdf/xxxx.xxxx" target="_blank"><img src="https://img.shields.io/badge/arXiv-b5212f.svg?logo=arxiv" height="21px"></a>
+[![GitHub](https://img.shields.io/badge/GitHub-000000?logo=github&logoColor=white)](https://github.com/black-yt/Iris)&#160;
 
-> **Lightweight Autonomous Desktop GuiAgent. Your AI-powered hands and eyes for desktop automation.**  
+**Lightweight Autonomous Desktop GuiAgent. Your AI-powered hands and eyes for desktop automation.**  
 
-*Lightweight • Minimal Code • Minimal Dependencies*
+*Lightweight • Minimal Code • Minimal Dependencies 🍃*
 
-*Visual Perception • Self-Correcting • Infinite Memory*
+*Visual Perception • Self-Correcting • Infinite Memory 💪🏻*
 
----
+</div>
+
 
 ## 🚀 What is Iris?
 
