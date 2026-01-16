@@ -66,6 +66,7 @@ class DisplayWindow:
         # State control variables
         self.auto_hide_id = None    # To store timer ID, prevent conflict
         self.auto_hide_delay = None
+        self.is_suppressed = False  # Suppress window showing (e.g. during screenshot)
 
         # Message queue
         self.msg_queue = queue.Queue()
@@ -100,8 +101,9 @@ class DisplayWindow:
             self.root.after_cancel(self.auto_hide_id)
             self.auto_hide_id = None
 
-        # Show window
-        self.root.deiconify()
+        # Show window (only if not suppressed)
+        if not self.is_suppressed:
+            self.root.deiconify()
         
         # Append text
         self.text_widget.config(state='normal')
@@ -141,6 +143,10 @@ class DisplayWindow:
     def safe_quit(self):
         """Thread-safe quit"""
         self.root.after(0, self.quit_app)
+
+    def set_suppressed(self, suppressed):
+        """Set whether to suppress window showing"""
+        self.is_suppressed = suppressed
 
     def clear(self):
         """Clear screen content"""

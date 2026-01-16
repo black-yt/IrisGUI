@@ -59,15 +59,13 @@ class IrisController:
         try:
             def pre_callback():
                 # Hide window before screenshot
+                self.window.set_suppressed(True) # Prevent window from showing up if new logs arrive
                 self.window.safe_hide()
                 time.sleep(0.5) # Wait for window to hide
 
             def post_callback():
                 # Restore window after screenshot
-                # Note: DisplayWindow.show() automatically deiconifies,
-                # but if there is no log output between steps, the window might remain hidden.
-                # It is better to explicitly restore it here, or let it remain hidden until there is a new log?
-                # The original logic was to restore the window, so we restore it here too.
+                self.window.set_suppressed(False) # Allow window to show again
                 self.window.safe_unhide()
 
             # Use DisplayWindow regardless of DEBUG_MODE

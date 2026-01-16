@@ -158,13 +158,15 @@ Reasoning...
 
         # 1. Perception
         log("👀 Capturing screen...")
-        # Updated to unpack coordinate_map
-        global_image, local_image, coordinate_map = self.vision.capture_state()
+        # Get current mouse position from executor
+        mouse_x, mouse_y = self.executor.get_mouse_position()
+        # Updated to unpack coordinate_map and mouse_grid_id
+        global_image, local_image, coordinate_map, mouse_grid_id = self.vision.capture_state(mouse_x, mouse_y)
         
         # 2. Build Context
         query = f"""## Current Step
 1. Analyze the Global View to understand the overall screen layout.
-2. Analyze the Local View to verify the precise mouse position (marked with a crosshair). **Note: This view reflects the state AFTER the previous action. The crosshair marks where the mouse is CURRENTLY located.**
+2. Analyze the Local View to verify the precise mouse position `{mouse_grid_id}`, marked with a crosshair, which reflects the state AFTER the previous action and shows the updated grid point IDs in the Local view where the mouse is CURRENTLY located.
 3. Based on the task history and current visual state, determine the next action.
 """
         log(f"❓ Query: {query}")

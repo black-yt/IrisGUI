@@ -59,7 +59,7 @@ class VisionPerceptor:
         
         # Draw vertical lines and X-axis labels
         col_index = 0
-        for x in range(0, width, step):
+        for x in range(0, width+1, step):
             # Line on the image
             draw_x = x + padding
             draw.line([(draw_x, padding), (draw_x, new_height - padding)], fill=GRID_COLOR, width=GRID_WIDTH)
@@ -68,16 +68,16 @@ class VisionPerceptor:
             label = f"{col_index:02d}"
             bbox = draw.textbbox((0, 0), label, font=font)
             text_w = bbox[2] - bbox[0]
-            draw.text((draw_x - text_w // 2, 5), label, fill="black", font=font)
+            draw.text((draw_x - text_w // 2, 10), label, fill="black", font=font)
             
             # Label on bottom border
-            draw.text((draw_x - text_w // 2, new_height - padding + 5), label, fill="black", font=font)
+            draw.text((draw_x - text_w // 2, new_height - padding + 10), label, fill="black", font=font)
             
             col_index += 1
 
         # Draw horizontal lines and Y-axis labels
         row_index = 0
-        for y in range(0, height, step):
+        for y in range(0, height+1, step):
             # Line on the image
             draw_y = y + padding
             draw.line([(padding, draw_y), (new_width - padding, draw_y)], fill=GRID_COLOR, width=GRID_WIDTH)
@@ -86,10 +86,10 @@ class VisionPerceptor:
             label = f"{row_index:02d}"
             bbox = draw.textbbox((0, 0), label, font=font)
             text_h = bbox[3] - bbox[1]
-            draw.text((5, draw_y - text_h // 2), label, fill="black", font=font)
+            draw.text((10, draw_y - text_h // 2), label, fill="black", font=font)
             
             # Label on right border
-            draw.text((new_width - padding + 5, draw_y - text_h // 2), label, fill="black", font=font)
+            draw.text((new_width - padding + 10, draw_y - text_h // 2), label, fill="black", font=font)
             
             row_index += 1
 
@@ -113,14 +113,13 @@ class VisionPerceptor:
                 
         return canvas, coordinate_map
 
-    def capture_state(self):
+    def capture_state(self, mouse_x, mouse_y):
         if self.pre_callback:
             self.pre_callback()
 
-        # Capture screenshot and mouse position
+        # Capture screenshot
         try:
             screenshot = pyautogui.screenshot()
-            mouse_x, mouse_y = pyautogui.position()
             
             # Ensure mouse coordinates are within screenshot bounds
             # This handles multi-monitor setups where mouse might be outside the primary screen
@@ -130,16 +129,15 @@ class VisionPerceptor:
         except Exception as e:
             print(f"Error capturing state: {e}")
             screenshot = Image.new('RGB', (1920, 1080), color='black')
-            mouse_x, mouse_y = 0, 0
-
+            # mouse_x, mouse_y are passed in
+            
         # 1. Generate Global View
         # Global view uses GRID_STEP and prefix 'G'
         global_image_raw = screenshot.copy()
         
-        global_image, global_map = self._draw_grid_with_labels(global_image_raw, GRID_STEP, "G", 0, 0)
-
         # Draw mouse on global view
-        self._draw_mouse(global_image, mouse_x, mouse_y, r=16)
+        self._draw_mouse(global_image_raw, mouse_x, mouse_y, r=16)
+        global_image, global_map = self._draw_grid_with_labels(global_image_raw, GRID_STEP, "G", 0, 0)
         
         # 2. Generate Local View
         # Crop centered on mouse
@@ -152,17 +150,22 @@ class VisionPerceptor:
         local_image_raw = screenshot.crop((left, top, right, bottom))
         
         # Local view uses LOCAL_GRID_STEP and prefix 'L'
-        # Pass (left, top) as offset so the map contains global coordinates
-        local_image, local_map = self._draw_grid_with_labels(local_image_raw, LOCAL_GRID_STEP, "L", left, top)
-
         # Draw mouse on local view
         # Mouse position relative to the crop
         local_mouse_x = mouse_x - left
         local_mouse_y = mouse_y - top
-        self._draw_mouse(local_image, local_mouse_x, local_mouse_y, r=8)
-
+        self._draw_mouse(local_image_raw, local_mouse_x, local_mouse_y, r=8)
+        # Pass (left, top) as offset so the map contains global coordinates
+        local_image, local_map = self._draw_grid_with_labels(local_image_raw, LOCAL_GRID_STEP, "L", left, top)
+        
         # Merge maps
         full_coordinate_map = {**global_map, **local_map}
+
+        # Calculate mouse grid ID in Local View
+        # local_mouse_x and local_mouse_y are already calculated above
+        col = round(local_mouse_x / LOCAL_GRID_STEP)
+        row = round(local_mouse_y / LOCAL_GRID_STEP)
+        mouse_grid_id = f"L-{col:02d}-{row:02d}"
 
         # Debug archive
         if DEBUG_MODE:
@@ -175,13 +178,21 @@ class VisionPerceptor:
         if self.post_callback:
             self.post_callback()
 
-        return global_image, local_image, full_coordinate_map
+        return global_image, local_image, full_coordinate_map, mouse_grid_id
 
 
 class ActionExecutor:
     def __init__(self, pre_callback=None, post_callback=None):
         self.pre_callback = pre_callback
         self.post_callback = post_callback
+        # Initialize mouse position
+        try:
+            self.mouse_x, self.mouse_y = pyautogui.position()
+        except:
+            self.mouse_x, self.mouse_y = 0, 0
+
+    def get_mouse_position(self):
+        return self.mouse_x, self.mouse_y
 
     def execute(self, action_dict, coordinate_map=None):
         if self.pre_callback:
@@ -201,6 +212,8 @@ class ActionExecutor:
                 if coordinate_map and point_id in coordinate_map:
                     x, y = coordinate_map[point_id]
                     pyautogui.moveTo(x, y, duration=duration, tween=pyautogui.easeInOutQuad)
+                    # Update internal mouse position
+                    self.mouse_x, self.mouse_y = x, y
                     return f"Action move to {point_id} ({x}, {y}) executed."
                 else:
                     return f"Error: Point ID '{point_id}' not found in coordinate map."
@@ -299,11 +312,13 @@ if __name__ == "__main__":
     try:
         print("Testing VisionPerceptor...")
         vision = VisionPerceptor()
-        global_img, local_img, coord_map = vision.capture_state()
+        # Need to pass mouse coordinates now
+        global_img, local_img, coord_map, mouse_id = vision.capture_state(500, 500)
         print(f"Capture successful.")
         print(f"Global size: {global_img.size}")
         print(f"Local size: {local_img.size}")
         print(f"Map size: {len(coord_map)}")
+        print(f"Mouse ID: {mouse_id}")
         print(f"Sample G point: {list(coord_map.keys())[0]} -> {list(coord_map.values())[0]}")
     except Exception as e:
         print(f"VisionPerceptor test failed: {e}")
