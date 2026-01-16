@@ -7,12 +7,10 @@
 ╚═╝╚═╝  ╚═╝╚═╝╚══════╝
 ```
 
-Lightweight Autonomous Desktop GuiAgent
-
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)](https://www.python.org/)
 
-> **Your AI-powered hands and eyes for desktop automation.**  
+> **Lightweight Autonomous Desktop GuiAgent. Your AI-powered hands and eyes for desktop automation.**  
 
 *Lightweight • Minimal Code • Minimal Dependencies*
 
