@@ -155,7 +155,7 @@ Reasoning...
             if log_callback:
                 log_callback(full_text)
 
-        log(f"\n➖➖➖➖➖➖➖➖➖➖ Step {self.step_count} ➖➖➖➖➖➖➖➖➖➖")
+        log(f"\n➖➖➖➖➖ Step {self.step_count} ➖➖➖➖➖")
 
         # 1. Perception
         log("👀 Capturing screen...")
