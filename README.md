@@ -90,6 +90,26 @@ graph TD
 
 ---
 
+## Cases
+
+* **Task**: 玩一局植物大战僵尸
+
+https://github.com/user-attachments/assets/067b6fb4-d242-4b4b-b4e1-696eb170c3d2
+
+<br>
+
+* **Task**: Open Google Chrome and search for Shanghai's weather
+
+https://github.com/user-attachments/assets/067b6fb4-d242-4b4b-b4e1-696eb170c3d2
+
+<br>
+
+* **Task**: Open Story.txt and write a short story of 100 words
+
+https://github.com/user-attachments/assets/47c928c7-5226-4d9b-b5ff-dff41d17f874
+
+---
+
 ## ⚡ Quick Start
 
 Ready to let Iris take the wheel? Follow these steps to get started in minutes!
