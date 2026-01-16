@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)](https://www.python.org/)
 <a href="https://arxiv.org/pdf/xxxx.xxxx" target="_blank"><img src="https://img.shields.io/badge/arXiv-b5212f.svg?logo=arxiv" height="21px"></a>
-[![GitHub](https://img.shields.io/badge/GitHub-000000?logo=github&logoColor=white)](https://github.com/black-yt/Iris)&#160;
+[![GitHub](https://img.shields.io/badge/GitHub-000000?logo=github&logoColor=white)](https://github.com/black-yt/IrisGUI)&#160;
 
 **Lightweight Autonomous Desktop GuiAgent. Your AI-powered hands and eyes for desktop automation.**  
 
@@ -30,6 +30,12 @@ Iris is **lightweight**, with **minimal code** and **dependencies**, requiring o
 *   **Infinite Memory** 🧠
 
 Powered by a robust **ReAct (Reasoning + Acting)** loop, Iris can handle complex workflows, recover from errors, and remember context over long periods thanks to its hierarchical memory system.
+
+---
+
+## 🆕 Latest News
+
+🚩 **Update** (2026-01-16) We release Iris-v1.0.
 
 ---
 
@@ -71,11 +77,12 @@ graph TD
 
 | Feature | Description |
 | :--- | :--- |
-| 👁️ **Dual-View Vision** | Uses **Global** (coarse) and **Local** (fine) grids to locate elements with pixel-perfect accuracy. |
-| 🧠 **Hierarchical Memory** | Smartly compresses history into **Short-term** and **Long-term** layers. No more token overflow! |
-| 🛡️ **Self-Correction** | Verifies cursor position before clicking. If it misses, it adjusts and tries again. |
-| 🎮 **Human-Like Control** | Smooth mouse movements, typing, scrolling, and even drag-and-drop support. |
-| 📺 **Live Debug Mode** | Watch Iris think and act in real-time with a dedicated GUI dashboard. |
+| 🍃 **Quick Installation**  | Only need to install **a few** dependencies and configure **an** API.                               |
+| 👁️ **Dual-View Vision**    | Uses **Global** (coarse) and **Local** (fine) grids to locate elements with pixel-perfect accuracy. |
+| 🧠 **Hierarchical Memory** | Smartly compresses history into **Short-term** and **Long-term** layers. No more token overflow!    |
+| 🛡️ **Self-Correction**     | Verifies cursor position before clicking. If it misses, it adjusts and tries again.                 |
+| 🎮 **Human-Like Control**  | Smooth mouse movements, typing, scrolling, and even drag-and-drop support.                          |
+| 📺 **Live Debug Mode**     | Watch Iris think and act in real-time with a dedicated GUI dashboard.                               |
 
 ---
 
@@ -85,8 +92,8 @@ Ready to let Iris take the wheel? Follow these steps to get started in minutes!
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/black-yt/Iris.git
-cd Iris
+git clone https://github.com/black-yt/IrisGUI.git
+cd IrisGUI
 ```
 
 ### 2. Install Dependencies
@@ -98,67 +105,44 @@ pip install -r requirements.txt
 ### 3. Configure Environment
 Create a `.env` file in the root directory (copy from `.env.example` if available) and add your LLM credentials:
 ```ini
-LLM_API_ENDPOINT=https://api.openai.com/v1
-LLM_API_KEY=sk-your-api-key-here
-LLM_MODEL_NAME=gemini-3-pro
+LLM_API_ENDPOINT="https://api.openai.com/v1"
+LLM_API_KEY="sk-your-api-key-here"
+LLM_MODEL_NAME="gemini-3-pro"
 ```
 
 ### 4. Run Iris! 🏃‍♂️
-You can run Iris in **GUI Mode** (default) to see what it's doing, or **Console Mode**.
-
 ```bash
-# Run with a task description
-python main.py "Open Notepad and type 'Hello World!'"
+python main.py
 ```
 
-> **💡 Pro Tip:** To stop Iris in an emergency, press **ESC** three times quickly! 🛑
+> **💡 Tip:** To stop Iris in an emergency, press **ESC** three times quickly! 🛑
 
 ---
 
-## 📂 Project Structure
+## 📬 Contact
 
-Here's a quick tour of the codebase so you can start hacking right away:
+- 💬 **GitHub Issues**: Please open an issue for bug reports or feature requests
 
-```text
-.
-├── main.py               # 🎬 Entry point. Handles GUI, threads, and safety checks.
-└── scripts
-    ├── config.py         # ⚙️ Configuration hub (API keys, visual thresholds).
-    ├── tools.py          # 🛠️ The "Body". Handles screenshots, grids, and mouse/keyboard inputs.
-    ├── memory.py         # 🧠 The "Memory". Manages context compression and retrieval.
-    └── agent.py          # 🤖 The "Brain". Core ReAct loop and prompt engineering.
+- 📧 **Email**: [xu_wanghan@sjtu.edu.cn](https://black-yt.github.io/)
+
+---
+
+## 📜 Citation
+
+If you would like to cite our work, please use the following BibTeX.
+
+```bib
+Coming soon...
 ```
 
 ---
 
-## 🎨 Customization
+## 🌟 Star History
 
-Want to tweak Iris? Check out `scripts/config.py`!
+If you find this work helpful, please consider to **star⭐** this [repo](https://github.com/InternScience/SGI-Bench). Thanks for your support! 🤩
 
-*   **`DEBUG_MODE`**: Set to `True` to save screenshots of every step in `scripts/debug/`.
-*   **`GRID_STEP`**: Adjust the density of the navigation grid.
-*   **`MAX_STEPS`**: Limit how long Iris can run to prevent infinite loops.
+[![InternScience/SGI-Bench Stargazers](https://reporoster.com/stars/InternScience/SGI-Bench)](https://github.com/InternScience/SGI-Bench/stargazers)
 
----
+[![Star History Chart](https://api.star-history.com/svg?repos=InternScience/SGI-Bench,TIGER-AI-Lab/MMLU-Pro,MMMU-Benchmark/MMMU,idavidrein/gpqa,SuperGPQA/SuperGPQA&type=date&legend=top-left)](https://www.star-history.com/#InternScience/SGI-Bench&TIGER-AI-Lab/MMLU-Pro&MMMU-Benchmark/MMMU&idavidrein/gpqa&SuperGPQA/SuperGPQA&type=date&legend=top-left)
 
-## 🤝 Contributing
-
-We love contributions! Whether it's fixing a bug, adding a new tool, or improving the documentation, your help is welcome.
-
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
-
----
-
-## 📜 License
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
----
-
-<div align="center">
-  <sub>Built with ❤️ by the Open Source Community</sub>
-</div>
+<p align="right"><a href="#top">🔝Back to top</a></p>
