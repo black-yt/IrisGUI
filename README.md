@@ -35,7 +35,7 @@ Powered by a robust **ReAct (Reasoning + Acting)** loop, Iris can handle complex
 
 ## 🆕 Latest News
 
-🚩 **Update** (2026-01-16) We release Iris-v1.0.
+🚩 **Update** (2026-01-16) We release **Iris-v1.0**.
 
 ---
 
