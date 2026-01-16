@@ -107,7 +107,7 @@ pip install -r requirements.txt
 ```
 
 ### 3. Configure Environment
-Create a `.env` file in the root directory (copy from `.env.example` if available) and add your LLM credentials:
+Create a `.env` file in the root directory (copy from [`.env.example`](.env.example) if available) and add your LLM credentials:
 ```ini
 LLM_API_ENDPOINT="https://base_url/v1"
 LLM_API_KEY="sk-your-api-key-here"
