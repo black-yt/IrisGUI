@@ -114,7 +114,7 @@ LLM_API_KEY="sk-your-api-key-here"
 LLM_MODEL_NAME="gemini-3-pro"
 ```
 
-### 4. Run Iris! 🏃‍♂️
+### 4. Run Iris
 ```bash
 python main.py
 ```
