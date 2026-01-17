@@ -9,8 +9,8 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)](https://www.python.org/)
-<a href="https://arxiv.org/pdf/xxxx.xxxx" target="_blank"><img src="https://img.shields.io/badge/arXiv-b5212f.svg?logo=arxiv" height="21px"></a>
 [![GitHub](https://img.shields.io/badge/GitHub-000000?logo=github&logoColor=white)](https://github.com/black-yt/IrisGUI)&#160;
+<a href="https://arxiv.org/pdf/xxxx.xxxx" target="_blank"><img src="https://img.shields.io/badge/arXiv-b5212f.svg?logo=arxiv" height="21px"></a>
 
 **A Lightweight Desktop GUI Agent via Dynamic Focus Vision and Hierarchical Memory**  
 
@@ -35,7 +35,7 @@ Powered by a robust **ReAct (Reasoning + Acting)** loop, Iris can handle complex
 
 ## 🆕 Latest News
 
-🚩 **Update** (2026-01-16) We release **Iris-v1.0**.
+🚩 **Update** (2026-01-18) We release **Iris-v1.0**.
 
 ---
 
@@ -75,7 +75,7 @@ A **dynamic focusing view** strategy is adopted to improve positioning accuracy 
 
 ---
 
-## 🎞️ Cases
+## 🎞️ Demos
 
 * **Task**: `玩一局植物大战僵尸`
 
@@ -148,10 +148,8 @@ Coming soon...
 
 ## 🌟 Star History
 
-If you find this work helpful, please consider to **star⭐** this [repo](https://github.com/InternScience/SGI-Bench). Thanks for your support! 🤩
+If you find this work helpful, please consider to **star⭐** this [repo](https://github.com/black-yt/IrisGUI). Thanks for your support! 🤩
 
-[![InternScience/SGI-Bench Stargazers](https://reporoster.com/stars/InternScience/SGI-Bench)](https://github.com/InternScience/SGI-Bench/stargazers)
-
-[![Star History Chart](https://api.star-history.com/svg?repos=InternScience/SGI-Bench,TIGER-AI-Lab/MMLU-Pro,MMMU-Benchmark/MMMU,idavidrein/gpqa,SuperGPQA/SuperGPQA&type=date&legend=top-left)](https://www.star-history.com/#InternScience/SGI-Bench&TIGER-AI-Lab/MMLU-Pro&MMMU-Benchmark/MMMU&idavidrein/gpqa&SuperGPQA/SuperGPQA&type=date&legend=top-left)
+[![black-yt/IrisGUI Stargazers](https://reporoster.com/stars/black-yt/IrisGUI)](https://github.com/black-yt/IrisGUI/stargazers)
 
 <p align="right"><a href="#top">🔝Back to top</a></p>
