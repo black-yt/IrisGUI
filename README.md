@@ -136,7 +136,7 @@ python main.py
 
 ---
 
-## 📜 Citation
+<!-- ## 📜 Citation
 
 If you would like to cite our work, please use the following BibTeX.
 
@@ -144,7 +144,7 @@ If you would like to cite our work, please use the following BibTeX.
 Coming soon...
 ```
 
----
+--- -->
 
 ## 🌟 Star History
 
