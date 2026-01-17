@@ -16,7 +16,7 @@
 
 *Lightweight • Minimal Code • Minimal Dependencies 🍃*
 
-*Visual Perception • Self-Correcting • Infinite Memory 💪🏻*
+*Visual Perception • Infinite Memory • Long Interaction 💪🏻*
 </div>
 
 
@@ -26,8 +26,8 @@
 
 Iris is **lightweight**, with **minimal code** and **dependencies**, requiring only a **single API key**. Yet, it packs a punch with:
 *   **Visual Perception** 👁️
-*   **Self-Correcting** 🛡️
 *   **Infinite Memory** 🧠
+*   **Long Interaction** 🔄
 
 Powered by a robust **ReAct (Reasoning + Acting)** loop, Iris can handle complex workflows, recover from errors, and remember context over long periods thanks to its hierarchical memory system.
 
@@ -68,6 +68,7 @@ A **dynamic focusing view** strategy is adopted to improve positioning accuracy 
 | 🍃 **Quick Installation**   | Only need to install **a few** dependencies and configure **an** API.                               |
 | 👁️ **Dynamic Focus Vision** | Uses **Global** (coarse) and **Local** (fine) views to locate elements with pixel-perfect accuracy. |
 | 🧠 **Hierarchical Memory**  | Smartly compresses history into **Short-term** and **Long-term** layers. No more token overflow!    |
+| 🔄 **Long Interaction**     | Complete super-long real-world tasks with **100 steps or more**.                                    |
 | 🛡️ **Self-Correction**      | Verifies cursor position before clicking. If it misses, it adjusts and tries again.                 |
 | 🎮 **Human-Like Control**   | Smooth mouse movements, typing, scrolling, and even drag-and-drop support.                          |
 | 📺 **Live Debug Mode**      | Watch Iris think and act in real-time with a dedicated GUI dashboard.                               |
