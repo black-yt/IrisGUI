@@ -327,7 +327,8 @@ class ActionExecutor:
         
         if self.post_callback:
             self.post_callback()
-            
+        
+        time.sleep(1) # In case the screen hasn't changed yet
         return result
 
 if __name__ == "__main__":
