@@ -47,6 +47,18 @@ Iris operates on a cycle of **Reasoning**, **Action**, **Observation** and **Ref
   <img src="assets/architecture.png" alt="Iris Architecture" width="850">
 </p>
 
+A **dynamic focusing view** strategy is adopted to improve positioning accuracy and action efficiency.
+
+<p align="center">
+  <img src="assets/dual_views.png" alt="Dynamic Focusing View" width="850">
+</p>
+
+**Hierarchical memory** can effectively avoid context explosion and prevent task forgetting.
+
+<p align="center">
+  <img src="assets/memory.png" alt="Memory" width="400">
+</p>
+
 ---
 
 ## ✨ Key Features
