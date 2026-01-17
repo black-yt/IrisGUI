@@ -39,41 +39,13 @@ Powered by a robust **ReAct (Reasoning + Acting)** loop, Iris can handle complex
 
 ---
 
-## 🧠 Architecture & Flow
+## 🧠 Architecture
 
-Iris operates on a cycle of **Observation**, **Reasoning**, **Action**, and **Reflection**. Here's how the magic happens:
+Iris operates on a cycle of **Reasoning**, **Action**, **Observation** and **Reflection**. Here's how the magic happens:
 
-```mermaid
-graph TD
-    User["👤 User Task"]
-    
-    subgraph "Iris Agent 🤖"
-        Agent["🧠 Brain (Agent.py)"]
-        Parser["🔍 Action Parser"]
-        Memory["📚 Hierarchical Memory"]
-        
-        subgraph "Perception & Action 🛠️"
-            Vision["👁️ Vision Perceptor"]
-            Executor["⚡ Action Executor"]
-        end
-    end
-
-    Environment["🖥️ Desktop Environment"]
-    
-    User -- "Query" --> Agent
-    Agent -- "Result" --> User
-    
-    Agent -- "Add" --> Memory
-    Memory -- "Get" --> Agent
-
-    Memory -- "Compress" --> Memory
-
-    Agent -- "Reasoning & Action" --> Parser
-    Parser -- "Action" --> Executor
-    Executor -- "Mouse/Keyboard" --> Environment
-    Environment -- "Screenshot" --> Vision
-    Vision -- "Global & Local Views" --> Agent
-```
+<p align="center">
+  <img src="assets/architecture.png" alt="Iris Architecture" width="850">
+</p>
 
 ---
 
