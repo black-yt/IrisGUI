@@ -12,7 +12,7 @@
 <a href="https://arxiv.org/pdf/xxxx.xxxx" target="_blank"><img src="https://img.shields.io/badge/arXiv-b5212f.svg?logo=arxiv" height="21px"></a>
 [![GitHub](https://img.shields.io/badge/GitHub-000000?logo=github&logoColor=white)](https://github.com/black-yt/IrisGUI)&#160;
 
-**Lightweight Autonomous Desktop GuiAgent. Your AI-powered hands and eyes for desktop automation.**  
+**A Lightweight Desktop GUI Agent via Dynamic Focus Vision and Hierarchical Memory**  
 
 *Lightweight • Minimal Code • Minimal Dependencies 🍃*
 
