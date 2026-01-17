@@ -74,7 +74,7 @@ A **dynamic focusing view** strategy is adopted to improve positioning accuracy 
 
 ---
 
-## 🎮 Cases
+## 🎞️ Cases
 
 * **Task**: `玩一局植物大战僵尸`
 
