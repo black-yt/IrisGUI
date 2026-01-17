@@ -81,12 +81,12 @@ graph TD
 
 | Feature | Description |
 | :--- | :--- |
-| 🍃 **Quick Installation**  | Only need to install **a few** dependencies and configure **an** API.                               |
-| 👁️ **Dual-View Vision**    | Uses **Global** (coarse) and **Local** (fine) grids to locate elements with pixel-perfect accuracy. |
-| 🧠 **Hierarchical Memory** | Smartly compresses history into **Short-term** and **Long-term** layers. No more token overflow!    |
-| 🛡️ **Self-Correction**     | Verifies cursor position before clicking. If it misses, it adjusts and tries again.                 |
-| 🎮 **Human-Like Control**  | Smooth mouse movements, typing, scrolling, and even drag-and-drop support.                          |
-| 📺 **Live Debug Mode**     | Watch Iris think and act in real-time with a dedicated GUI dashboard.                               |
+| 🍃 **Quick Installation**   | Only need to install **a few** dependencies and configure **an** API.                               |
+| 👁️ **Dynamic Focus Vision** | Uses **Global** (coarse) and **Local** (fine) views to locate elements with pixel-perfect accuracy. |
+| 🧠 **Hierarchical Memory**  | Smartly compresses history into **Short-term** and **Long-term** layers. No more token overflow!    |
+| 🛡️ **Self-Correction**      | Verifies cursor position before clicking. If it misses, it adjusts and tries again.                 |
+| 🎮 **Human-Like Control**   | Smooth mouse movements, typing, scrolling, and even drag-and-drop support.                          |
+| 📺 **Live Debug Mode**      | Watch Iris think and act in real-time with a dedicated GUI dashboard.                               |
 
 ---
 
