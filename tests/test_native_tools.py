@@ -31,6 +31,12 @@ class NativeToolSchemaTests(unittest.TestCase):
         self.assertEqual(move_schema["function"]["parameters"]["required"], ["point_id"])
         self.assertIn("point_id", move_schema["function"]["parameters"]["properties"])
 
+    def test_hotkey_schema_requires_verified_focus(self):
+        hotkey_schema = next(schema for schema in GUI_TOOL_SCHEMAS if schema["function"]["name"] == "hotkey")
+
+        self.assertIn("focus is already verified", hotkey_schema["function"]["description"])
+        self.assertIn("currently focused target", hotkey_schema["function"]["description"])
+
 
 class NativeToolArgumentTests(unittest.TestCase):
     def test_parse_tool_arguments_accepts_object_json(self):

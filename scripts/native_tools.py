@@ -140,7 +140,11 @@ GUI_ACTION_TOOLS = [
     NativeToolSpec(
         name="hotkey",
         action_type="hotkey",
-        description="Press a keyboard shortcut such as ctrl+c, ctrl+l, enter, escape, or alt+tab.",
+        description=(
+            "Press a keyboard shortcut such as ctrl+c, ctrl+l, enter, escape, or alt+tab. "
+            "Only use when the intended application/control focus is already verified; shortcuts are sent "
+            "to the currently focused target, not to the window under the mouse."
+        ),
         parameters={
             "type": "object",
             "properties": {

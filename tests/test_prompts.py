@@ -31,6 +31,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("newest screenshot after the previous action", IRIS_SYSTEM_PROMPT)
         self.assertIn("Do not output JSON action blocks", IRIS_SYSTEM_PROMPT)
         self.assertIn("Usually do not emit `move` followed immediately by `click`", IRIS_SYSTEM_PROMPT)
+        self.assertIn("Keyboard actions affect only the currently focused application or control", IRIS_SYSTEM_PROMPT)
+        self.assertIn("For browser shortcuts such as `ctrl+l`, make sure the browser window is focused first", IRIS_SYSTEM_PROMPT)
 
     def test_step_query_marks_mouse_grid_as_latest_local_id(self):
         query = build_step_query("L-10-10", "G-08-06")
