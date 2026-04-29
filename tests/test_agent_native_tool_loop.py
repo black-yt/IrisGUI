@@ -28,10 +28,18 @@ class FakeMemory:
     def __init__(self):
         self.context_requests = []
         self.steps = []
+        self.model_inputs = []
+        self.model_outputs = []
 
     def get_full_context(self, query, images=None):
         self.context_requests.append((query, images))
         return [{"role": "user", "content": "current state"}]
+
+    def add_model_input_log(self, messages, step, images=None):
+        self.model_inputs.append({"messages": messages, "step": step, "images": images})
+
+    def add_model_output_log(self, content, tool=None, step=0):
+        self.model_outputs.append({"content": content, "tool": tool, "step": step})
 
     def add_step(self, role, content, tool=None, log_content=None, log_extra=None, log_callback=None, compress=True):
         step = {"role": role, "content": content, "log_content": log_content, "log_extra": log_extra}
@@ -48,6 +56,7 @@ class FakeMemory:
         assistant_log_extra=None,
         user_log_extra=None,
         log_callback=None,
+        debug_log=True,
     ):
         self.add_step("assistant", assistant_content, tool=tool, log_content=assistant_log_content, log_extra=assistant_log_extra)
         self.add_step("user", user_content, log_extra=user_log_extra)
@@ -132,6 +141,11 @@ class AgentNativeToolLoopTests(unittest.TestCase):
         self.assertIsNotNone(images)
         self.assertEqual(agent.executor.executed[0][0], {"action_type": "move", "point_id": "G-00-00"})
         self.assertEqual(agent.executor.executed[0][1], {"G-00-00": (0, 0)})
+        self.assertEqual(agent.memory.model_inputs[0]["messages"], [{"role": "user", "content": "current state"}])
+        self.assertEqual(agent.memory.model_inputs[0]["step"], 1)
+        self.assertEqual(agent.memory.model_inputs[0]["images"], {"global": "global_step.png", "local": "local_step.png"})
+        self.assertEqual(agent.memory.model_outputs[0]["content"], "I will move to the requested grid point.")
+        self.assertEqual(agent.memory.model_outputs[0]["tool"], [{"name": "move", "arguments": {"point_id": "G-00-00"}}])
         assistant_memory = agent.memory.steps[0]
         self.assertIn("I will move to the requested grid point.", assistant_memory["content"])
         self.assertIn("Tool call: move", assistant_memory["content"])

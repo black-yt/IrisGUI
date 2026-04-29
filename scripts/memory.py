@@ -96,6 +96,7 @@ class HierarchicalMemory:
         ]
         self.long_memory_layer = []
         self.short_memory_layer = []
+        self._fixed_input_logged = False
         
         self.client = OpenAI(**openai_client_kwargs())
 
@@ -106,9 +107,6 @@ class HierarchicalMemory:
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
             self.debug_save_path = os.path.join(log_dir, f"{timestamp}.jsonl")
-            
-            # Save fixed layer immediately
-            self._append_to_log(self.fixed_layer)
 
     def _append_to_log(self, steps: list[dict]):
         """Helper to append steps to the JSONL log file"""
@@ -126,7 +124,67 @@ class HierarchicalMemory:
         except Exception as e:
             print(f"Failed to write to debug log: {e}")
 
-    def add_step(self, role, content, tool=None, log_content=None, log_extra=None, log_callback=None, compress=True):
+    def _content_text_for_log(self, content):
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    text_parts.append(str(item.get("text", "")))
+            return "\n".join(part for part in text_parts if part)
+        return str(content)
+
+    def add_model_input_log(self, messages, step, images=None):
+        if not DEBUG_MODE:
+            return
+
+        fixed_prefix_present = messages[:len(self.fixed_layer)] == self.fixed_layer
+        log_steps = []
+        if fixed_prefix_present and not self._fixed_input_logged:
+            for message in self.fixed_layer:
+                log_steps.append(
+                    {
+                        "step": 0,
+                        "direction": "input",
+                        "role": message.get("role", ""),
+                        "content": self._content_text_for_log(message.get("content", "")),
+                    }
+                )
+            self._fixed_input_logged = True
+
+        if not messages or (fixed_prefix_present and len(messages) == len(self.fixed_layer)):
+            if log_steps:
+                self._append_to_log(log_steps)
+            return
+
+        message = messages[-1]
+        log_step = {
+            "step": step,
+            "direction": "input",
+            "role": message.get("role", ""),
+            "content": self._content_text_for_log(message.get("content", "")),
+        }
+        if images and message.get("role") == "user":
+            log_step["images"] = images
+        log_steps.append(log_step)
+        self._append_to_log(log_steps)
+
+    def add_model_output_log(self, content, tool=None, step=0):
+        if not DEBUG_MODE:
+            return
+
+        log_step = {
+            "step": step,
+            "direction": "output",
+            "role": "assistant",
+            "content": self._content_text_for_log(content),
+        }
+        if tool:
+            log_step["tool"] = tool
+        self._append_to_log([log_step])
+
+    def add_step(self, role, content, tool=None, log_content=None, log_extra=None, log_callback=None, compress=True, debug_log=True):
         """
         Add a new step to short_memory_layer.
         """
@@ -134,7 +192,7 @@ class HierarchicalMemory:
         self.short_memory_layer.append(step)
         
         # Append to debug log
-        if DEBUG_MODE:
+        if DEBUG_MODE and debug_log:
             log_step = {"role": role, "content": content if log_content is None else log_content}
             if tool:
                 log_step["tool"] = tool
@@ -155,6 +213,7 @@ class HierarchicalMemory:
         assistant_log_extra=None,
         user_log_extra=None,
         log_callback=None,
+        debug_log=True,
     ):
         self.add_step(
             "assistant",
@@ -164,6 +223,7 @@ class HierarchicalMemory:
             log_extra=assistant_log_extra,
             log_callback=log_callback,
             compress=False,
+            debug_log=debug_log,
         )
         self.add_step(
             "user",
@@ -171,6 +231,7 @@ class HierarchicalMemory:
             log_extra=user_log_extra,
             log_callback=log_callback,
             compress=False,
+            debug_log=debug_log,
         )
         self.compress_context(log_callback)
 

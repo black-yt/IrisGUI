@@ -7,6 +7,7 @@ from scripts.native_tools import (
     assistant_text_content,
     compact_tool_call_for_log,
     format_tool_call_for_memory,
+    normalize_tool_call,
     tool_calls_to_actions,
 )
 from scripts.tools import VisionPerceptor, ActionExecutor
@@ -144,6 +145,26 @@ class IrisAgent:
     def _message_tool_calls(message):
         return message.get("tool_calls") if isinstance(message, dict) else getattr(message, "tool_calls", None)
 
+    @staticmethod
+    def _tool_calls_for_log(tool_calls):
+        log_entries = []
+        for tool_call in tool_calls or []:
+            try:
+                log_entries.append(compact_tool_call_for_log(normalize_tool_call(tool_call)))
+                continue
+            except Exception:
+                pass
+
+            function_block = tool_call.get("function", {}) if isinstance(tool_call, dict) else getattr(tool_call, "function", None)
+            if isinstance(function_block, dict):
+                name = function_block.get("name", "")
+                arguments = function_block.get("arguments", "")
+            else:
+                name = getattr(function_block, "name", "")
+                arguments = getattr(function_block, "arguments", "")
+            log_entries.append({"name": str(name), "arguments": arguments})
+        return log_entries
+
     def step(self, log_callback=None):
         if self.step_count >= MAX_STEPS:
             return "🛑 [Max Steps Reached]. Stopping."
@@ -166,6 +187,7 @@ class IrisAgent:
         # 2. Build Context
         query = build_step_query(mouse_grid_id, nearest_global_grid_id)
         messages = self.memory.get_full_context(query, images=(global_image, local_image))
+        self.memory.add_model_input_log(messages, self.step_count, images=capture_files)
 
         # 3. Reasoning and native tool selection
         full_response = ""
@@ -183,9 +205,12 @@ class IrisAgent:
             assistant_content = self._message_content(assistant_message)
             assistant_text = assistant_text_content(assistant_content).strip()
             tool_calls = self._message_tool_calls(assistant_message)
+            model_output_tool_log = self._tool_calls_for_log(tool_calls)
 
             if assistant_text:
                 full_response = assistant_text
+
+            self.memory.add_model_output_log(full_response, tool=model_output_tool_log, step=self.step_count)
 
             if finish_reason == "length":
                 raise ToolCallProtocolError("model response was truncated before a complete native tool call was available")
@@ -237,6 +262,7 @@ class IrisAgent:
             assistant_log_extra=assistant_log_extra,
             user_log_extra=user_log_extra,
             log_callback=memory_log,
+            debug_log=False,
         )
         
         return feedback

@@ -104,7 +104,159 @@ class MemoryToolLogTests(unittest.TestCase):
             memory_module.DEBUG_MODE = old_debug_mode
             os.unlink(handle.name)
 
-    def test_debug_log_initial_fixed_layer_uses_step_zero(self):
+    def test_model_input_log_records_actual_prompt_text_and_images(self):
+        old_debug_mode = memory_module.DEBUG_MODE
+        memory = HierarchicalMemory("system prompt", "initial task")
+        images = {"global": "global_20260429_120000.png", "local": "local_20260429_120000.png"}
+        handle = tempfile.NamedTemporaryFile(delete=False)
+        handle.close()
+        memory.debug_save_path = handle.name
+
+        try:
+            memory_module.DEBUG_MODE = True
+            memory.add_model_input_log(
+                memory.fixed_layer
+                + [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "actual model prompt"},
+                            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc", "detail": "high"}},
+                        ],
+                    },
+                ],
+                step=4,
+                images=images,
+            )
+
+            with open(handle.name, "r", encoding="utf-8") as log_file:
+                entries = [json.loads(line) for line in log_file]
+
+            self.assertEqual([entry["direction"] for entry in entries], ["input", "input", "input"])
+            self.assertEqual(
+                [(entry["step"], entry["role"], entry["content"]) for entry in entries],
+                [
+                    (0, "system", "system prompt"),
+                    (0, "user", "initial task"),
+                    (4, "user", "actual model prompt"),
+                ],
+            )
+            self.assertEqual(entries[2]["images"], images)
+            self.assertNotIn("data:image", entries[2]["content"])
+        finally:
+            memory_module.DEBUG_MODE = old_debug_mode
+            os.unlink(handle.name)
+
+    def test_model_input_log_does_not_repeat_fixed_prompt_prefix(self):
+        old_debug_mode = memory_module.DEBUG_MODE
+        memory = HierarchicalMemory("system prompt", "initial task")
+        handle = tempfile.NamedTemporaryFile(delete=False)
+        handle.close()
+        memory.debug_save_path = handle.name
+
+        first_messages = memory.fixed_layer + [{"role": "user", "content": "first step prompt"}]
+        second_messages = memory.fixed_layer + [{"role": "user", "content": "second step prompt"}]
+
+        try:
+            memory_module.DEBUG_MODE = True
+            memory.add_model_input_log(first_messages, step=1)
+            memory.add_model_input_log(second_messages, step=2)
+
+            with open(handle.name, "r", encoding="utf-8") as log_file:
+                entries = [json.loads(line) for line in log_file]
+
+            self.assertEqual(
+                [(entry["step"], entry["role"], entry["content"]) for entry in entries],
+                [
+                    (0, "system", "system prompt"),
+                    (0, "user", "initial task"),
+                    (1, "user", "first step prompt"),
+                    (2, "user", "second step prompt"),
+                ],
+            )
+        finally:
+            memory_module.DEBUG_MODE = old_debug_mode
+            os.unlink(handle.name)
+
+    def test_model_input_log_records_only_current_prompt_not_history_messages(self):
+        old_debug_mode = memory_module.DEBUG_MODE
+        memory = HierarchicalMemory("system prompt", "initial task")
+        handle = tempfile.NamedTemporaryFile(delete=False)
+        handle.close()
+        memory.debug_save_path = handle.name
+
+        messages = memory.fixed_layer + [
+            {"role": "assistant", "content": "Tool call: move\nArguments: {\"point_id\": \"G-01-02\"}"},
+            {"role": "user", "content": "Execution Result: Action move to G-01-02 executed."},
+            {"role": "user", "content": "current visual prompt"},
+        ]
+
+        try:
+            memory_module.DEBUG_MODE = True
+            memory.add_model_input_log(messages, step=3)
+
+            with open(handle.name, "r", encoding="utf-8") as log_file:
+                entries = [json.loads(line) for line in log_file]
+
+            self.assertEqual(
+                [(entry["step"], entry["role"], entry["content"]) for entry in entries],
+                [
+                    (0, "system", "system prompt"),
+                    (0, "user", "initial task"),
+                    (3, "user", "current visual prompt"),
+                ],
+            )
+            logged_content = "\n".join(entry["content"] for entry in entries)
+            self.assertNotIn("Tool call: move", logged_content)
+            self.assertNotIn("Execution Result", logged_content)
+        finally:
+            memory_module.DEBUG_MODE = old_debug_mode
+            os.unlink(handle.name)
+
+    def test_model_output_log_records_assistant_content_and_tool_calls(self):
+        old_debug_mode = memory_module.DEBUG_MODE
+        memory = HierarchicalMemory("system prompt", "initial task")
+        tool = [{"name": "hotkey", "arguments": {"keys": ["ctrl", "l"]}}]
+        handle = tempfile.NamedTemporaryFile(delete=False)
+        handle.close()
+        memory.debug_save_path = handle.name
+
+        try:
+            memory_module.DEBUG_MODE = True
+            memory.add_model_output_log("I will focus the browser.", tool=tool, step=5)
+
+            with open(handle.name, "r", encoding="utf-8") as log_file:
+                entry = json.loads(log_file.readline())
+
+            self.assertEqual(entry["direction"], "output")
+            self.assertEqual(entry["role"], "assistant")
+            self.assertEqual(entry["content"], "I will focus the browser.")
+            self.assertEqual(entry["tool"], tool)
+        finally:
+            memory_module.DEBUG_MODE = old_debug_mode
+            os.unlink(handle.name)
+
+    def test_add_interaction_can_skip_debug_log_for_runtime_memory_only(self):
+        old_debug_mode = memory_module.DEBUG_MODE
+        memory = HierarchicalMemory("system prompt", "initial task")
+        handle = tempfile.NamedTemporaryFile(delete=False)
+        handle.close()
+        memory.debug_save_path = handle.name
+
+        try:
+            memory_module.DEBUG_MODE = True
+            memory.add_interaction("assistant memory", "Execution Result: clicked", debug_log=False)
+
+            with open(handle.name, "r", encoding="utf-8") as log_file:
+                entries = [json.loads(line) for line in log_file]
+
+            self.assertEqual(entries, [])
+            self.assertEqual([step["content"] for step in memory.short_memory_layer], ["assistant memory", "Execution Result: clicked"])
+        finally:
+            memory_module.DEBUG_MODE = old_debug_mode
+            os.unlink(handle.name)
+
+    def test_debug_log_initialization_does_not_write_non_call_entries(self):
         old_debug_mode = memory_module.DEBUG_MODE
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
@@ -112,13 +264,7 @@ class MemoryToolLogTests(unittest.TestCase):
                 with patch("scripts.memory.os.path.dirname", return_value=temp_dir):
                     memory = HierarchicalMemory("system prompt", "initial task")
 
-                with open(memory.debug_save_path, "r", encoding="utf-8") as log_file:
-                    entries = [json.loads(line) for line in log_file]
-
-                self.assertEqual([entry["step"] for entry in entries], [0, 0])
-                self.assertEqual([entry["role"] for entry in entries], ["system", "user"])
-                self.assertTrue(all(list(entry.keys())[:2] == ["step", "timestamp"] for entry in entries))
-                self.assertTrue(all("schema_version" not in entry for entry in entries))
+                self.assertFalse(os.path.exists(memory.debug_save_path))
             finally:
                 memory_module.DEBUG_MODE = old_debug_mode
 
