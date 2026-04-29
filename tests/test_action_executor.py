@@ -2,6 +2,7 @@ import os
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
+from types import SimpleNamespace
 from unittest.mock import call, patch
 
 os.environ.setdefault("LLM_API_ENDPOINT", "http://example.invalid/v1")
@@ -119,6 +120,53 @@ class ActionExecutorTests(unittest.TestCase):
 
         self.assertEqual(result, "Action scroll down half executed.")
         scroll.assert_called_once_with(-tools.SCROLL_HALF_CLICKS)
+
+    @patch("scripts.tools.time.sleep")
+    @patch("scripts.tools.prompt_for_user_input", return_value=SimpleNamespace(text="personal account\nuse profile 2", delay_seconds=2.5))
+    def test_ask_input_prompts_user_and_returns_response(self, prompt_mock, sleep):
+        executor, events = self.make_executor()
+        logs = []
+
+        with redirect_stdout(StringIO()) as output:
+            result = executor.execute(
+                {"action_type": "ask_input", "question": "Which account should I use?"},
+                log_callback=logs.append,
+            )
+
+        self.assertEqual(result, "Action ask_input executed. User response: personal account\nuse profile 2")
+        self.assertEqual(events, [])
+        self.assertIn("Iris is waiting for your input", output.getvalue())
+        self.assertIn("Which account should I use?", output.getvalue())
+        self.assertIn("User input received. Continuing after 2.5 seconds.", output.getvalue())
+        self.assertIn("Iris is waiting for your input", "".join(logs))
+        self.assertIn("Which account should I use?", "".join(logs))
+        self.assertIn("User input received. Continuing after 2.5 seconds.", "".join(logs))
+        prompt_mock.assert_called_once_with("Which account should I use?")
+        sleep.assert_called_once_with(2.5)
+
+    @patch("scripts.tools.time.sleep")
+    @patch("scripts.tools.prompt_for_user_input", return_value=None)
+    def test_ask_input_handles_user_cancel(self, prompt_mock, sleep):
+        executor, _ = self.make_executor()
+
+        with redirect_stdout(StringIO()):
+            result = executor.execute({"action_type": "ask_input", "question": "Continue?"})
+
+        self.assertEqual(result, "Action ask_input executed. User response: [User cancelled input]")
+        prompt_mock.assert_called_once_with("Continue?")
+        sleep.assert_not_called()
+
+    @patch("scripts.tools.time.sleep")
+    @patch("scripts.tools.prompt_for_user_input")
+    def test_ask_input_requires_question(self, prompt_mock, sleep):
+        executor, events = self.make_executor()
+
+        result = executor.execute({"action_type": "ask_input"})
+
+        self.assertEqual(result, "Error: 'question' is required for ask_input action.")
+        self.assertEqual(events, [])
+        prompt_mock.assert_not_called()
+        sleep.assert_not_called()
 
 
 if __name__ == "__main__":

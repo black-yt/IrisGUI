@@ -37,6 +37,13 @@ class NativeToolSchemaTests(unittest.TestCase):
         self.assertIn("focus is already verified", hotkey_schema["function"]["description"])
         self.assertIn("currently focused target", hotkey_schema["function"]["description"])
 
+    def test_ask_input_schema_requires_question_and_is_called_alone(self):
+        ask_schema = next(schema for schema in GUI_TOOL_SCHEMAS if schema["function"]["name"] == "ask_input")
+
+        self.assertEqual(ask_schema["function"]["parameters"]["required"], ["question"])
+        self.assertIn("question", ask_schema["function"]["parameters"]["properties"])
+        self.assertIn("Call this tool alone", ask_schema["function"]["description"])
+
 
 class NativeToolArgumentTests(unittest.TestCase):
     def test_parse_tool_arguments_accepts_object_json(self):
@@ -87,6 +94,24 @@ class NativeToolCallConversionTests(unittest.TestCase):
 
         self.assertEqual(action, {"action_type": "click", "button": "left", "repeat": 2})
         self.assertEqual(normalized["id"], "call_click")
+
+    def test_ask_input_tool_call_converts_to_executor_action(self):
+        tool_call = {
+            "id": "call_ask",
+            "type": "function",
+            "function": {
+                "name": "ask_input",
+                "arguments": json.dumps({"question": "Which account should I use?"}),
+            },
+        }
+
+        action, normalized = tool_call_to_action(tool_call)
+
+        self.assertEqual(
+            action,
+            {"action_type": "ask_input", "question": "Which account should I use?"},
+        )
+        self.assertEqual(normalized["function"]["name"], "ask_input")
 
     def test_unknown_tool_call_is_rejected(self):
         tool_call = {

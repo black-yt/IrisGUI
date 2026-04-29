@@ -173,6 +173,25 @@ GUI_ACTION_TOOLS = [
         },
     ),
     NativeToolSpec(
+        name="ask_input",
+        action_type="ask_input",
+        description=(
+            "Ask the user for missing information, a choice, or confirmation. Use only when the task cannot "
+            "continue reliably from the screen and existing context. Call this tool alone; the user's answer "
+            "is available only after this step finishes."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "One clear question to show to the user in the terminal.",
+                },
+            },
+            "required": ["question"],
+        },
+    ),
+    NativeToolSpec(
         name="final_answer",
         action_type="final_answer",
         description="Report that the user's task is fully complete. Do not call this while work remains.",

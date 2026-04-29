@@ -4,7 +4,7 @@ from typing import Optional
 
 
 MENU_ACTIONS = ("newline", "start_now", "start_5s", "start_custom", "clear", "exit")
-MENU_LABELS = {
+TASK_MENU_LABELS = {
     "newline": "New Line",
     "start_now": "Start Now",
     "start_5s": "Start After 5s",
@@ -12,6 +12,40 @@ MENU_LABELS = {
     "clear": "Clear",
     "exit": "Exit",
 }
+USER_INPUT_MENU_LABELS = {
+    "newline": "New Line",
+    "start_now": "Submit Now",
+    "start_5s": "Submit After 5s",
+    "start_custom": "Submit After Custom Delay",
+    "clear": "Clear",
+    "exit": "Cancel",
+}
+
+
+@dataclass(frozen=True)
+class PromptEditorConfig:
+    title: str
+    header_title: str
+    empty_message: str
+    delay_prompt: str
+    input_prompt: str = "> "
+    logo_text: str = ""
+    question: str = ""
+    menu_labels: dict[str, str] = None
+    menu_descriptions: dict[str, str] = None
+
+    def labels(self):
+        return self.menu_labels or TASK_MENU_LABELS
+
+    def descriptions(self):
+        return self.menu_descriptions or {
+            "newline": "insert a blank line",
+            "start_now": "run immediately",
+            "start_5s": "prepare screen for five seconds",
+            "start_custom": "use the delay field",
+            "clear": "reset task text",
+            "exit": "close launcher",
+        }
 
 
 @dataclass(frozen=True)
@@ -44,34 +78,45 @@ def parse_delay_seconds(value: str) -> Optional[float]:
     return seconds
 
 
-def _fallback_prompt() -> Optional[TaskPromptResult]:
+def _fallback_prompt(config: PromptEditorConfig) -> Optional[TaskPromptResult]:
     lines = []
+    labels = config.labels()
     while True:
-        print("Enter task text. Submit an empty line to open the action menu.")
+        print(config.header_title)
+        if config.question:
+            print(config.question)
+        print("Submit an empty line to open the action menu.")
         while True:
             try:
-                line = input("> ")
+                line = input(config.input_prompt)
             except EOFError:
                 return None
             if line == "":
                 break
             lines.append(line)
 
-        task_text = "\n".join(lines)
-        print("\n1. New Line\n2. Start Now\n3. Start After 5s\n4. Start After Custom Delay\n5. Clear\n6. Exit")
+        text = "\n".join(lines)
+        print(
+            f"\n1. {labels['newline']}\n"
+            f"2. {labels['start_now']}\n"
+            f"3. {labels['start_5s']}\n"
+            f"4. {labels['start_custom']}\n"
+            f"5. {labels['clear']}\n"
+            f"6. {labels['exit']}"
+        )
         choice = input("Choose an action: ").strip()
         if choice == "1":
             lines.append("")
             continue
         if choice == "2":
-            return TaskPromptResult(task_text, delay_seconds=0) if task_text.strip() else None
+            return TaskPromptResult(text, delay_seconds=0) if text.strip() else None
         if choice == "3":
-            return TaskPromptResult(task_text, delay_seconds=5) if task_text.strip() else None
+            return TaskPromptResult(text, delay_seconds=5) if text.strip() else None
         if choice == "4":
-            seconds = parse_delay_seconds(input("Delay seconds: "))
-            if seconds is not None and task_text.strip():
-                return TaskPromptResult(task_text, delay_seconds=seconds)
-            print("Invalid delay or empty task.")
+            seconds = parse_delay_seconds(input(config.delay_prompt))
+            if seconds is not None and text.strip():
+                return TaskPromptResult(text, delay_seconds=seconds)
+            print(f"Invalid delay or {config.empty_message.lower()}")
             continue
         if choice == "5":
             lines = []
@@ -80,7 +125,7 @@ def _fallback_prompt() -> Optional[TaskPromptResult]:
             return None
 
 
-def _run_prompt_toolkit_editor(logo_text: str = "") -> Optional[TaskPromptResult]:
+def _run_prompt_toolkit_editor(config: PromptEditorConfig) -> Optional[TaskPromptResult]:
     from prompt_toolkit.application import Application
     from prompt_toolkit.document import Document
     from prompt_toolkit.key_binding import KeyBindings
@@ -91,8 +136,10 @@ def _run_prompt_toolkit_editor(logo_text: str = "") -> Optional[TaskPromptResult
 
     state = MenuState()
     status = {"text": ""}
+    menu_labels = config.labels()
+    menu_descriptions = config.descriptions()
 
-    logo_lines = [line for line in logo_text.strip().splitlines() if line.strip()]
+    logo_lines = [line for line in config.logo_text.strip().splitlines() if line.strip()]
 
     def header_fragments():
         fragments = []
@@ -102,35 +149,35 @@ def _run_prompt_toolkit_editor(logo_text: str = "") -> Optional[TaskPromptResult
             fragments.append(("", "\n"))
         fragments.extend(
             [
-                ("class:title", "Iris Task Launcher\n"),
+                ("class:title", f"{config.header_title}\n"),
                 ("class:hint", "Use Up/Down to choose an action, then press Enter.\n"),
                 ("class:hint", "New Line is selected by default, so Enter normally inserts a line break."),
             ]
         )
+        if config.question:
+            fragments.extend(
+                [
+                    ("", "\n\n"),
+                    ("class:menu-title", "Question\n"),
+                    ("class:question", f"{config.question}\n"),
+                ]
+            )
         return fragments
 
     text_area = TextArea(
         text="",
         multiline=True,
         wrap_lines=True,
-        prompt="> ",
+        prompt=config.input_prompt,
     )
     delay_area = TextArea(
         text="",
         multiline=False,
         height=1,
-        prompt="Custom delay seconds > ",
+        prompt=config.delay_prompt,
     )
 
     def menu_fragments():
-        descriptions = {
-            "newline": "insert a blank line",
-            "start_now": "run immediately",
-            "start_5s": "prepare screen for five seconds",
-            "start_custom": "use the delay field",
-            "clear": "reset task text",
-            "exit": "close launcher",
-        }
         fragments = []
         if status["text"]:
             fragments.extend([("class:status", status["text"]), ("", "\n")])
@@ -139,8 +186,8 @@ def _run_prompt_toolkit_editor(logo_text: str = "") -> Optional[TaskPromptResult
             label_style = "class:selected" if index == state.selected_index else "class:action"
             desc_style = "class:selected" if index == state.selected_index else "class:muted"
             marker = ">" if index == state.selected_index else " "
-            fragments.append((label_style, f" {marker} {MENU_LABELS[action]:<28}"))
-            fragments.append((desc_style, f"{descriptions[action]}\n"))
+            fragments.append((label_style, f" {marker} {menu_labels[action]:<28}"))
+            fragments.append((desc_style, f"{menu_descriptions[action]}\n"))
         return fragments
 
     key_bindings = KeyBindings()
@@ -172,7 +219,7 @@ def _run_prompt_toolkit_editor(logo_text: str = "") -> Optional[TaskPromptResult
         if action == "start_custom":
             seconds = parse_delay_seconds(delay_area.text)
             if seconds is None:
-                status["text"] = "Enter a non-negative number in Custom delay seconds."
+                status["text"] = "Enter a non-negative number in the delay field."
                 event.app.layout.focus(delay_area)
                 event.app.invalidate()
                 return
@@ -186,7 +233,7 @@ def _run_prompt_toolkit_editor(logo_text: str = "") -> Optional[TaskPromptResult
 
     def start_task(event, delay_seconds: float):
         if not text_area.text.strip():
-            status["text"] = "Task description is empty."
+            status["text"] = config.empty_message
             event.app.invalidate()
             return
         event.app.exit(result=TaskPromptResult(text_area.text, delay_seconds=delay_seconds))
@@ -206,13 +253,16 @@ def _run_prompt_toolkit_editor(logo_text: str = "") -> Optional[TaskPromptResult
     root = Frame(
         HSplit(
             [
-                Window(FormattedTextControl(header_fragments), height=len(logo_lines[:6]) + 4),
+                Window(
+                    FormattedTextControl(header_fragments),
+                    height=len(logo_lines[:6]) + (len(config.question.splitlines()) + 7 if config.question else 4),
+                ),
                 text_area,
                 delay_area,
                 Window(FormattedTextControl(menu_fragments), height=8),
             ]
         ),
-        title="Iris Task Launcher",
+        title=config.title,
     )
     style = Style.from_dict(
         {
@@ -222,6 +272,7 @@ def _run_prompt_toolkit_editor(logo_text: str = "") -> Optional[TaskPromptResult
             "title": "fg:#bfdbfe bold",
             "hint": "fg:#94a3b8",
             "menu-title": "fg:#fbbf24 bold",
+            "question": "fg:#dbeafe",
             "action": "fg:#dbeafe",
             "muted": "fg:#94a3b8",
             "selected": "bg:#2563eb fg:#ffffff bold",
@@ -238,10 +289,43 @@ def _run_prompt_toolkit_editor(logo_text: str = "") -> Optional[TaskPromptResult
 
 
 def prompt_for_task(logo_text: str = "") -> Optional[TaskPromptResult]:
+    config = PromptEditorConfig(
+        title="Iris Task Launcher",
+        header_title="Iris Task Launcher",
+        empty_message="Task description is empty.",
+        delay_prompt="Custom delay seconds > ",
+        logo_text=logo_text,
+    )
     if not sys.stdin.isatty() or not sys.stdout.isatty():
-        return _fallback_prompt()
+        return _fallback_prompt(config)
 
     try:
-        return _run_prompt_toolkit_editor(logo_text)
+        return _run_prompt_toolkit_editor(config)
     except ImportError:
-        return _fallback_prompt()
+        return _fallback_prompt(config)
+
+
+def prompt_for_user_input(question: str) -> Optional[TaskPromptResult]:
+    config = PromptEditorConfig(
+        title="Iris User Input",
+        header_title="Iris Needs Your Input",
+        empty_message="Response is empty.",
+        delay_prompt="Custom submit delay seconds > ",
+        question=question,
+        menu_labels=USER_INPUT_MENU_LABELS,
+        menu_descriptions={
+            "newline": "insert a blank line",
+            "start_now": "submit immediately",
+            "start_5s": "submit after five seconds",
+            "start_custom": "use the delay field",
+            "clear": "reset response text",
+            "exit": "cancel user input",
+        },
+    )
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        return _fallback_prompt(config)
+
+    try:
+        return _run_prompt_toolkit_editor(config)
+    except ImportError:
+        return _fallback_prompt(config)

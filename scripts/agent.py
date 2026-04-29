@@ -41,7 +41,7 @@ You never receive raw absolute screen coordinates. The runtime converts grid IDs
 
 ## Native Tool Calling
 You must act only through the provided OpenAI-compatible native tools:
-`move`, `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, and `final_answer`.
+`move`, `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, `ask_input`, and `final_answer`.
 
 - Do not output JSON action blocks in plain text.
 - Do not output XML/text tags such as `<action>`, `<tool_call>`, or `<answer>`.
@@ -49,10 +49,13 @@ You must act only through the provided OpenAI-compatible native tools:
 - If more work remains, every response must include at least one native tool call.
 - If the task is complete, use the `final_answer` tool instead of answering with text only.
 - Assistant content is the semantic memory for future steps; tools are the executable action.
-- These tools must include one concise assistant content sentence before or alongside the tool call: `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, and `final_answer`.
+- These tools must include one concise assistant content sentence before or alongside the tool call: `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, `ask_input`, and `final_answer`.
 - `move` must also include assistant content when moving toward a task target, app, window, control, text field, menu, or navigation destination. You may omit assistant content only for a trivial local cursor refinement where the reason is already obvious from the immediately previous step.
 - For multiple tool calls in one response, include assistant content whenever any included tool requires it.
 - Keep assistant content brief and operational: state what you observed and why the next tool call is appropriate. Do not include hidden chain-of-thought.
+
+## User Input Rule
+Use `ask_input` only when you cannot safely continue without user-provided information, a user choice, or confirmation. Ask one clear question. Do not use it for information that is visible on the screen or inferable from the task. Call `ask_input` by itself, then wait for the next step to use the user's response.
 
 ## Focus And Keyboard Rules
 Keyboard actions affect only the currently focused application or control. Mouse hover does not guarantee focus.
@@ -106,15 +109,16 @@ You are seeing the latest screen state after the previous action.
 1. Compare the latest visual state with the task and the previous execution history.
 2. Identify the immediate next safe GUI operation.
 3. Use Global View for broad navigation and Local View for precise verification.
-4. Emit native tool call(s). If using `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, or `final_answer`, include one concise assistant content sentence explaining the observed state and why that action is appropriate. For `move`, include assistant content when moving toward a target, app, window, control, text field, menu, or navigation destination; only trivial local cursor refinement may omit it.
+4. Emit native tool call(s). If using `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, `ask_input`, or `final_answer`, include one concise assistant content sentence explaining the observed state and why that action is appropriate. For `move`, include assistant content when moving toward a target, app, window, control, text field, menu, or navigation destination; only trivial local cursor refinement may omit it.
 5. Use multiple tool calls in this step only when they do not depend on UI loading or another visual check.
+6. If user information, a user choice, or confirmation is required, call `ask_input` alone and wait for the next step before acting on the answer.
 """.strip()
 
 
 TOOL_CALL_REQUIRED_RETRY_PROMPT = """
 Your previous response did not include a native tool call.
 
-Continue from the same screenshot and context. You must now emit one or more native tool calls. Assistant content is required for `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, and `final_answer`; it is also required for non-trivial `move` actions. If the task is complete, call `final_answer`.
+Continue from the same screenshot and context. You must now emit one or more native tool calls. Assistant content is required for `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, `ask_input`, and `final_answer`; it is also required for non-trivial `move` actions. If the task is complete, call `final_answer`.
 
 Do not answer with text only.
 """.strip()
@@ -255,7 +259,7 @@ class IrisAgent:
                 tool_memory_parts.append(format_tool_call_for_memory(normalized_tool_call))
 
                 # 4. Execution
-                action_feedback = self.executor.execute(action_dict, coordinate_map)
+                action_feedback = self.executor.execute(action_dict, coordinate_map, log_callback=log_callback)
                 feedback_parts.append(action_feedback)
                 tool_results.append({"action": action_dict, "feedback": action_feedback})
                 if "[Task Completed]" in action_feedback:

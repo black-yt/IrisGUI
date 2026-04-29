@@ -17,7 +17,7 @@ Compress Iris's operational history into accurate, compact memory that can be re
 ## What Matters
 - The user's original goal.
 - What Iris observed or inferred about the UI state.
-- Actions Iris attempted, including important grid IDs, typed text, hotkeys, waits, clicks, and final answers.
+- Actions Iris attempted, including important grid IDs, typed text, hotkeys, waits, clicks, user questions, user-provided answers, and final answers.
 - Execution results, errors, blockers, and whether the task is complete.
 - Current unresolved state: what should be tried next, what should be avoided, and any relevant UI position or focus information.
 

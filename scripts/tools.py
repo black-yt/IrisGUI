@@ -5,6 +5,8 @@ from datetime import datetime
 from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
 from scripts.config import *
+from scripts.terminal_input import prompt_for_user_input
+from scripts.utils import DISPLAY_BOX_WIDTH, colorize_terminal, format_status_box
 import pyautogui
 import pyperclip
 
@@ -320,18 +322,20 @@ class ActionExecutor:
             
         return self.mouse_x, self.mouse_y
 
-    def execute(self, action_dict, coordinate_map=None):
-        if self.pre_callback:
+    def execute(self, action_dict, coordinate_map=None, log_callback=None):
+        action_type = action_dict.get("action_type")
+        is_user_input = action_type == "ask_input"
+        if self.pre_callback and not is_user_input:
             self.pre_callback()
         try:
-            return self._execute_action(action_dict, coordinate_map)
+            return self._execute_action(action_dict, coordinate_map, log_callback=log_callback)
         finally:
-            if self.post_callback:
+            if self.post_callback and not is_user_input:
                 self.post_callback()
-            if ACTION_SETTLE_SECONDS > 0 and action_dict.get("action_type") != "wait":
+            if ACTION_SETTLE_SECONDS > 0 and action_type not in {"wait", "ask_input"}:
                 time.sleep(ACTION_SETTLE_SECONDS)
 
-    def _execute_action(self, action_dict, coordinate_map=None):
+    def _execute_action(self, action_dict, coordinate_map=None, log_callback=None):
         action_type = action_dict.get("action_type")
         result = ""
         try:
@@ -406,6 +410,13 @@ class ActionExecutor:
                 time.sleep(seconds)
                 return f"Action wait {seconds}s executed."
 
+            elif action_type == "ask_input":
+                question = str(action_dict.get("question", "")).strip()
+                if not question:
+                    return "Error: 'question' is required for ask_input action."
+                response = self._ask_input(question, log_callback=log_callback)
+                return f"Action ask_input executed. User response: {response}"
+
             elif action_type == "final_answer":
                 text = action_dict.get("text", "")
                 return f"[Task Completed]: {text}"
@@ -452,6 +463,22 @@ class ActionExecutor:
                 pyperclip.copy(previous_clipboard)
             except pyperclip.PyperclipException:
                 pass
+
+    def _ask_input(self, question, log_callback=None):
+        message = f"Iris is waiting for your input.\n\nQuestion:\n{question}"
+        print(colorize_terminal(format_status_box("User Input", message)), flush=True)
+        if log_callback:
+            log_callback(format_status_box("User Input", message, width=DISPLAY_BOX_WIDTH) + "\n")
+        result = prompt_for_user_input(question)
+        if result is None:
+            return "[User cancelled input]"
+        if result.delay_seconds > 0:
+            delay_message = f"User input received. Continuing after {result.delay_seconds:g} seconds."
+            print(colorize_terminal(format_status_box("User Input", delay_message)), flush=True)
+            if log_callback:
+                log_callback(format_status_box("User Input", delay_message, width=DISPLAY_BOX_WIDTH) + "\n")
+            time.sleep(result.delay_seconds)
+        return result.text
 
 if __name__ == "__main__":
     # python -m scripts.tools

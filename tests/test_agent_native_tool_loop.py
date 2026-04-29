@@ -78,8 +78,8 @@ class FakeExecutor:
     def get_mouse_position(self):
         return 0, 0
 
-    def execute(self, action_dict, coordinate_map=None):
-        self.executed.append((action_dict, coordinate_map))
+    def execute(self, action_dict, coordinate_map=None, log_callback=None):
+        self.executed.append((action_dict, coordinate_map, log_callback))
         return f"executed {action_dict['action_type']}"
 
 
@@ -193,9 +193,10 @@ class AgentNativeToolLoopTests(unittest.TestCase):
         }
         agent = make_agent(response)
         logs = []
+        log_callback = logs.append
 
         with redirect_stdout(StringIO()):
-            agent.step(log_callback=logs.append)
+            agent.step(log_callback=log_callback)
 
         joined_logs = "\n".join(logs)
         self.assertNotIn("Step 1 started.", joined_logs)
@@ -204,6 +205,7 @@ class AgentNativeToolLoopTests(unittest.TestCase):
         self.assertNotIn("Waiting for fake-model response", joined_logs)
         self.assertNotIn("Executing wait", joined_logs)
         self.assertIn("Iris Agent Loop", joined_logs)
+        self.assertIs(agent.executor.executed[0][2], log_callback)
 
     def test_step_executes_multiple_native_tool_calls_in_order(self):
         response = {
@@ -240,7 +242,7 @@ class AgentNativeToolLoopTests(unittest.TestCase):
             feedback = agent.step()
 
         self.assertEqual(
-            [action for action, _ in agent.executor.executed],
+            [action for action, _, _ in agent.executor.executed],
             [
                 {"action_type": "click", "button": "left"},
                 {"action_type": "type", "text": "hello", "submit": True},
