@@ -63,7 +63,22 @@ MEMORY_RECENT_INTERACTIONS_TO_KEEP = _get_int("MEMORY_RECENT_INTERACTIONS_TO_KEE
 MEMORY_CHARS_PER_TOKEN = _get_float("MEMORY_CHARS_PER_TOKEN", 4.0)
 
 
+_WARNED_INVALID_TLS_ENV_VARS = set()
+
+
+def _drop_invalid_tls_cert_env_vars():
+    for name in ("SSL_CERT_FILE", "CURL_CA_BUNDLE"):
+        value = os.environ.get(name)
+        if not value or os.path.exists(value):
+            continue
+        os.environ.pop(name, None)
+        if name not in _WARNED_INVALID_TLS_ENV_VARS:
+            print(f"Warning: ignored invalid {name}={value!r}; file does not exist.")
+            _WARNED_INVALID_TLS_ENV_VARS.add(name)
+
+
 def openai_client_kwargs():
+    _drop_invalid_tls_cert_env_vars()
     kwargs = {
         "api_key": LLM_API_KEY,
         "base_url": LLM_API_ENDPOINT,
