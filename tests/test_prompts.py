@@ -37,6 +37,7 @@ class PromptTests(unittest.TestCase):
 
         self.assertIn("Global View image", query)
         self.assertIn("Local View image", query)
+        self.assertIn("cursor-anchored crop clipped at screen edges", query)
         self.assertIn("Nearby global mouse grid: `G-08-06`", query)
         self.assertIn("Current local mouse grid: `L-10-10`", query)
         self.assertLess(

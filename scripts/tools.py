@@ -189,8 +189,9 @@ class VisionPerceptor:
         return local_image, left, top, local_mouse_x, local_mouse_y
 
     def _local_mouse_grid_id(self):
-        col = max(0, round((CROP_SIZE / 2) / LOCAL_GRID_STEP))
-        row = max(0, round((CROP_SIZE / 2) / LOCAL_GRID_STEP))
+        crop_half = CROP_SIZE // 2
+        col = max(0, round(crop_half / LOCAL_GRID_STEP))
+        row = max(0, round(crop_half / LOCAL_GRID_STEP))
         return f"L-{col:02d}-{row:02d}", col, row
 
     def capture_state(self, mouse_x, mouse_y):

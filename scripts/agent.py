@@ -79,7 +79,7 @@ You are seeing the latest screen state after the previous action.
 
 ## Inputs Attached To This Message
 1. Global View image: full screen, coarse `G-xx-yy` grid, `G` marks in the four border corners.
-2. Local View image: cursor-centered crop, fine `L-xx-yy` grid, `L` marks in the four border corners.
+2. Local View image: cursor-anchored crop clipped at screen edges, fine `L-xx-yy` grid, `L` marks in the four border corners.
 3. Nearby global mouse grid: `{nearest_global_grid_id}`.
 4. Current local mouse grid: `{mouse_grid_id}`.
 
