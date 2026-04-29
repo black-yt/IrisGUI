@@ -1,147 +1,139 @@
-import re
-import json
-from json_repair import repair_json
 from openai import OpenAI
 from scripts.config import *
 from scripts.memory import HierarchicalMemory
+from scripts.native_tools import (
+    GUI_TOOL_SCHEMAS,
+    ToolCallProtocolError,
+    assistant_text_content,
+    compact_tool_call_for_log,
+    format_tool_call_for_memory,
+    tool_calls_to_actions,
+)
 from scripts.tools import VisionPerceptor, ActionExecutor
+from scripts.utils import DISPLAY_BOX_WIDTH, colorize_terminal, format_agent_loop, format_status_box
+
+
+IRIS_SYSTEM_PROMPT = """
+## Role
+You are Iris, a precise desktop automation agent. You operate the computer through screenshots, mouse actions, and keyboard actions, like a careful human assistant.
+
+## Mission
+Complete the user's desktop task with the smallest reliable sequence of GUI operations. At every step, observe the current screen, reason about what changed, and invoke native tools for the next safe action sequence.
+
+## Visual Inputs
+Each step includes two images. Both images have a white border with grid labels and a letter in each corner identifying the view.
+
+- Global View (`G`): full-screen screenshot with a coarse grid. Grid IDs use `G-column-row`, for example `G-05-03`. The global border and label text are larger than the local view.
+- Local View (`L`): cropped screenshot centered near the current mouse cursor with a fine grid. Grid IDs use `L-column-row`, for example `L-10-10`.
+- Mouse marker: the current cursor is marked by a crosshair in both images.
+- Current local mouse grid: the per-step user message gives a `mouse_grid_id`. It is always a Local View ID (`L-xx-yy`) computed from the newest screenshot after the previous action, and the cursor is precisely on that Local View point.
+- Nearby global grid: the per-step user message also gives the nearest Global View ID (`G-xx-yy`) to the current mouse position. This is a coarse nearby reference only; the cursor may be between global grid points.
+
+You never receive raw absolute screen coordinates. The runtime converts grid IDs to coordinates internally.
+
+## Localization Rules
+1. Use the Global View to understand the whole screen and find targets that are far from the cursor.
+2. If the target is visible in the Global View but not in the Local View, move to the nearest appropriate `G-xx-yy` grid point.
+3. If the target is visible in the Local View, use `L-xx-yy` for fine positioning. Do not use coarse `G` IDs for local fine adjustments.
+4. Before clicking, verify in the Local View that the crosshair significantly overlaps the clickable area itself, not merely nearby text or a label.
+5. If the target is not visually verified, move or wait first; do not guess.
+
+## Native Tool Calling
+You must act only through the provided OpenAI-compatible native tools:
+`move`, `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, and `final_answer`.
+
+- Do not output JSON action blocks in plain text.
+- Do not output XML/text tags such as `<action>`, `<tool_call>`, or `<answer>`.
+- Do not invent tools or use raw `(x, y)` coordinates.
+- You may include concise assistant text explaining the immediate reasoning, but every operation must be a native tool call.
+
+## Multi-Tool Policy
+A single step may contain multiple native tool calls only when they are safe to execute without a fresh screenshot.
+
+Good grouped examples:
+- Type text into an already focused input, optionally with submit.
+- Press a hotkey and then type text when the target focus is already verified.
+- Click a stable control and then wait briefly for the UI to settle.
+
+Do not group actions when the next action depends on page loading, animations, search results, menus appearing, focus changes, or visual verification.
+
+Usually do not emit `move` followed immediately by `click` in the same step. First move, then use the next screenshot to verify the crosshair location. Only combine them when precision is unimportant or the target location has already been verified.
+
+## Task Completion
+When the task is fully complete, call `final_answer` with a concise completion summary. Do not emit more tools after `final_answer`.
+
+## Reliability Principles
+- Prefer correctness over speed.
+- Preserve the user's data and avoid destructive actions unless explicitly requested.
+- Use `wait` when the UI needs time to update.
+- Use `type` for text input; non-ASCII text is supported by the executor.
+- Keep reasoning concise and action-focused.
+""".strip()
+
+
+def build_step_query(mouse_grid_id, nearest_global_grid_id):
+    return f"""
+## Current Step
+
+You are seeing the latest screen state after the previous action.
+
+## Inputs Attached To This Message
+1. Global View image: full screen, coarse `G-xx-yy` grid, `G` marks in the four border corners.
+2. Local View image: cursor-centered crop, fine `L-xx-yy` grid, `L` marks in the four border corners.
+3. Nearby global mouse grid: `{nearest_global_grid_id}`.
+4. Current local mouse grid: `{mouse_grid_id}`.
+
+`{nearest_global_grid_id}` is only the nearest Global View grid point near the current mouse position. The cursor is not necessarily on this Global View point; use it as a coarse whole-screen reference only.
+`{mouse_grid_id}` is the updated Local View grid point where the mouse is currently located in this newest screenshot. The cursor is precisely on this Local View point, and it is not an old grid point from history.
+
+## What To Do
+1. Compare the latest visual state with the task and the previous execution history.
+2. Identify the immediate next safe GUI operation.
+3. Use Global View for broad navigation and Local View for precise verification.
+4. Emit native tool call(s) only. Use multiple tool calls in this step only when they do not depend on UI loading or another visual check.
+""".strip()
 
 
 class IrisAgent:
     def __init__(self, task_description, pre_callback=None, post_callback=None):
-        self.system_prompt = """
-## Role
-You are Iris, an advanced AI desktop automation assistant designed to autonomously complete complex tasks on a computer. You act as the user's hands and eyes, navigating the operating system and applications with precision and intelligence.
-
-## Objective
-Your primary goal is to fulfill the user's request by executing a sequence of mouse and keyboard actions. You operate in a ReAct (Reasoning + Acting) loop, continuously observing the screen, reasoning about the current state, and executing the next logical step.
-
-## Capabilities
-1.  **Visual Perception**: You receive two visual inputs at each step. Both images are padded with a white border containing grid labels (00, 01, ...) to help you identify grid points.
-    -   **Global View**: A screenshot of the entire screen with a **Coarse Grid**. Grid points are identified by IDs in the format `G-xx-yy` (e.g., `G-05-03` corresponds to column 05, row 03).
-    -   **Local View**: A high-resolution cropped image focused on the area near the current mouse cursor position with a **Fine Grid**. Grid points are identified by IDs in the format `L-xx-yy` (e.g., `L-02-04`).
-    -   **Mouse Position**: The current mouse position is marked using a crosshair in both the global and local views.
-2.  **Action Execution**: You can perform a wide range of mouse and keyboard operations. **Crucially, movement actions use Grid IDs, not raw coordinates.**
-
-## Instructions
-1.  **Reason**:
-    -   Analyze the current state relative to the user's goal.
-    -   Observe the global and local views to obtain the grid point positions, mouse position, and target position.
-    -   **Localization Strategy**: You must strictly follow one of these three cases for positioning:
-        1.  **Global Approach**: If the target is visible in the Global View but NOT in the Local View, identify the nearest grid intersection point `G-xx-yy` to the target. Use the `move` action with this ID.
-        2.  **Local Approach**: If the target is visible in the Local View but not at the mouse position, **you MUST use the Fine Grid IDs (`L-xx-yy`) to make precise adjustments.** Do NOT use Global Grid IDs (`G-xx-yy`) in this case, as they are too coarse. Identify the nearest fine grid intersection point `L-xx-yy` to the target and use the `move` action with this ID.
-        3.  **Target Aligned**: The target must be at the mouse position of the Local View. **Crucially, the crosshair MUST significantly overlap with the target's clickable area (e.g., the icon itself, not just the label).** If the target is perfectly overlapped, proceed with the interaction (click, type, etc.).
-    -   **Grid Navigation**:
-        -   Read the numbers on the top/bottom white border for the X-axis (column) index.
-        -   Read the numbers on the left/right white border for the Y-axis (row) index.
-        -   Combine them to form the ID: `PREFIX-Column-Row` (e.g., `G-05-03`).
-    -   Formulate a plan for the immediate next step.
-    -   Explicitly state your reasoning process before generating the action block.
-2.  **Act**: Output a single JSON action block representing the next operation.
-
-## Action Specifications
-You must output your response in the following format:
-Reasoning...
-<action>
-{
-  "action_type": "action_name",
-  "param": "value"
-}
-</action>
-
-### Supported Actions & Examples
-
-#### 1. Mouse Operations
-*   **move**: Move the cursor to a specific grid point.
-    *   *Params*: `point_id` (string), `duration` (float, optional, default=0.5)
-    *   *Example*: Move to Global grid point column 05, row 03.
-        <action>
-        {"action_type": "move", "point_id": "G-05-03"}
-        </action>
-    *   *Example*: Move to Local grid point column 02, row 04.
-        <action>
-        {"action_type": "move", "point_id": "L-02-04"}
-        </action>
-*   **click**: Click the mouse button.
-    *   *Params*: `button` ("left"|"right"|"middle", default="left"), `repeat` (integer, default=1)
-    *   *Example*: Double-click the left button.
-        <action>
-        {"action_type": "click", "button": "left", "repeat": 2}
-        </action>
-*   **double_click**: specific action for double clicking (alternative to click with repeat=2). **Note: Opening desktop applications on Windows usually requires a double-click.**
-    *   *Example*:
-        <action>
-        {"action_type": "double_click"}
-        </action>
-*   **mouse_down**: Press and hold a mouse button.
-    *   *Params*: `button` ("left"|"right"|"middle", default="left")
-    *   *Example*: Hold left button.
-        <action>
-        {"action_type": "mouse_down", "button": "left"}
-        </action>
-*   **mouse_up**: Release a mouse button.
-    *   *Params*: `button` ("left"|"right"|"middle", default="left")
-    *   *Example*: Release left button.
-        <action>
-        {"action_type": "mouse_up", "button": "left"}
-        </action>
-*   **scroll**: Scroll the mouse wheel.
-    *   *Params*: `direction` ("up"|"down"|"left"|"right"), `amount` ("line"|"half"|"page")
-    *   *Example*: Scroll down by one page.
-        <action>
-        {"action_type": "scroll", "direction": "down", "amount": "page"}
-        </action>
-
-**Complex Interactions**:
-*   **Dragging**: To perform a drag operation, decompose it into steps:
-    1.  `move` to the start position.
-    2.  `mouse_down` to hold the element.
-    3.  `move` to the destination (can be multiple moves if the path is long).
-    4.  `mouse_up` to release.
-*   **Hovering**: To hover, simply `move` to the target and then `wait`.
-
-#### 2. Keyboard Operations
-*   **type**: Type a string of text.
-    *   *Params*: `text` (string), `submit` (boolean, default=False - if true, presses Enter after typing)
-    *   *Example*: Type "Hello World" and press Enter.
-        <action>
-        {"action_type": "type", "text": "Hello World", "submit": true}
-        </action>
-*   **hotkey**: Press a combination of keys.
-    *   *Params*: `keys` (list of strings)
-    *   *Example*: Copy (Ctrl+C).
-        <action>
-        {"action_type": "hotkey", "keys": ["ctrl", "c"]}
-        </action>
-
-#### 3. System Operations
-*   **wait**: Wait for a specified duration (useful for letting UI animations finish).
-    *   *Params*: `seconds` (float)
-    *   *Example*: Wait for 2.5 seconds.
-        <action>
-        {"action_type": "wait", "seconds": 2.5}
-        </action>
-*   **final_answer**: Indicates that the task is fully completed and outputs the complete result.
-    *   *Params*: `text` (string)
-    *   *Example*: Task completed successfully.
-        <action>
-        {"action_type": "final_answer", "text": "Task completed successfully."}
-        </action>
-
-## Constraints & Best Practices
--   **One Action Per Step**: You may only output ONE action block per response.
--   **Precision Matters**: Always prioritize accuracy. **Ensure the crosshair is directly ON the target before clicking.**
--   **Visual Verification**: Never assume the cursor is in the right place without checking the Local View.
--   **Coordinate System**: DO NOT calculate or output raw (x, y) coordinates. ALWAYS use the Grid IDs (`G-xx-yy` or `L-xx-yy`) provided in the visual input.
-"""
+        self.system_prompt = IRIS_SYSTEM_PROMPT
         self.memory = HierarchicalMemory(self.system_prompt, task_description)
         self.vision = VisionPerceptor(pre_callback, post_callback)
         self.executor = ActionExecutor(pre_callback, post_callback)
-        self.client = OpenAI(
-            api_key=LLM_API_KEY,
-            base_url=LLM_API_ENDPOINT
-        )
+        self.client = OpenAI(**openai_client_kwargs())
         self.step_count = 0
+
+    def _call_llm_for_action(self, messages):
+        return self.client.chat.completions.create(
+            model=LLM_MODEL_NAME,
+            messages=messages,
+            tools=GUI_TOOL_SCHEMAS,
+            tool_choice="auto",
+            parallel_tool_calls=True,
+        )
+
+    @staticmethod
+    def _first_choice(chat_response):
+        choices = chat_response.get("choices", []) if isinstance(chat_response, dict) else chat_response.choices
+        if not choices:
+            raise RuntimeError("LLM response contained no choices.")
+        return choices[0]
+
+    @staticmethod
+    def _choice_message(choice):
+        return choice.get("message", {}) if isinstance(choice, dict) else choice.message
+
+    @staticmethod
+    def _choice_finish_reason(choice):
+        return choice.get("finish_reason") if isinstance(choice, dict) else getattr(choice, "finish_reason", None)
+
+    @staticmethod
+    def _message_content(message):
+        return message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
+
+    @staticmethod
+    def _message_tool_calls(message):
+        return message.get("tool_calls") if isinstance(message, dict) else getattr(message, "tool_calls", None)
 
     def step(self, log_callback=None):
         if self.step_count >= MAX_STEPS:
@@ -149,93 +141,94 @@ Reasoning...
 
         self.step_count += 1
         
-        def log(text, end="\n"):
-            full_text = text + end
-            print(text, end=end, flush=True)
+        def emit(message, window_message=None):
+            text = str(message)
+            print(colorize_terminal(text), flush=True)
             if log_callback:
-                log_callback(full_text)
-
-        log(f"\n➖➖➖➖➖ Step {self.step_count} ➖➖➖➖➖")
+                log_callback(str(window_message or text) + "\n")
 
         # 1. Perception
-        log("👀 Capturing screen...")
         # Get current mouse position from executor
         mouse_x, mouse_y = self.executor.get_mouse_position()
         # Updated to unpack coordinate_map and mouse_grid_id
-        global_image, local_image, coordinate_map, mouse_grid_id = self.vision.capture_state(mouse_x, mouse_y)
+        global_image, local_image, coordinate_map, mouse_grid_id, nearest_global_grid_id = self.vision.capture_state(mouse_x, mouse_y)
+        capture_files = getattr(self.vision, "last_capture_files", None)
         
         # 2. Build Context
-        query = f"""## Current Step
-1. Analyze the Global View to understand the overall screen layout.
-2. Analyze the Local View to verify the precise mouse position `{mouse_grid_id}`, marked with a crosshair, which reflects the state AFTER the previous action and shows the updated grid point IDs in the Local view where the mouse is CURRENTLY located.
-3. Based on the task history and current visual state, determine the next action.
-"""
-        log(f"❓ Query: {query}")
+        query = build_step_query(mouse_grid_id, nearest_global_grid_id)
         messages = self.memory.get_full_context(query, images=(global_image, local_image))
 
-        # 3. Reasoning (Stream)
-        log("🧠 Thinking...")
+        # 3. Reasoning and native tool selection
         full_response = ""
-        action_block = None
+        feedback = ""
+        tool_results = []
+        tool_log = []
+        tool_memory_parts = []
+        error = None
         
         try:
-            stream = self.client.chat.completions.create(
-                model=LLM_MODEL_NAME,
-                messages=messages,
-                stream=True,
-                max_tokens=None
-            )
-            
-            for chunk in stream:
-                if not chunk.choices:
-                    continue
-                content = chunk.choices[0].delta.content
-                if content:
-                    print(content, end="", flush=True)
-                    if log_callback:
-                        log_callback(content)
-                    full_response += content
-                    
-                    # 4. Stream Parsing & Interruption Mechanism
-                    # Check if complete <action>...</action> is included
-                    match = re.search(r'<action>(.*?)</action>', full_response, re.DOTALL)
-                    if match:
-                        action_block = match.group(1)
-                        # Interrupt stream
-                        stream.close() 
-                        break
-            
-            log("", end="\n") # Newline
+            chat_response = self._call_llm_for_action(messages)
+            choice = self._first_choice(chat_response)
+            assistant_message = self._choice_message(choice)
+            finish_reason = self._choice_finish_reason(choice)
+            assistant_content = self._message_content(assistant_message)
+            assistant_text = assistant_text_content(assistant_content).strip()
+            tool_calls = self._message_tool_calls(assistant_message)
 
+            if assistant_text:
+                full_response = assistant_text
+
+            if finish_reason == "length":
+                raise ToolCallProtocolError("model response was truncated before a complete native tool call was available")
+
+            action_pairs = tool_calls_to_actions(tool_calls)
+            feedback_parts = []
+            for action_dict, normalized_tool_call in action_pairs:
+                tool_log.append(compact_tool_call_for_log(normalized_tool_call))
+                tool_memory_parts.append(format_tool_call_for_memory(normalized_tool_call))
+
+                # 4. Execution
+                action_feedback = self.executor.execute(action_dict, coordinate_map)
+                feedback_parts.append(action_feedback)
+                tool_results.append({"action": action_dict, "feedback": action_feedback})
+                if "[Task Completed]" in action_feedback:
+                    break
+
+            feedback = "\n".join(feedback_parts)
+        except ToolCallProtocolError as e:
+            feedback = f"Error: {e}"
+            error = feedback
         except Exception as e:
-            log(f"❌ Error during LLM inference: {e}")
+            error = f"Error during LLM inference: {e}"
+            emit(
+                format_agent_loop(self.step_count, mouse_grid_id, full_response, tool_results, error=error),
+                format_agent_loop(self.step_count, mouse_grid_id, full_response, tool_results, error=error, width=DISPLAY_BOX_WIDTH),
+            )
             return f"Error: {e}"
 
-        # 5. Action Parsing & Repair
-        feedback = ""
-        if action_block:
-            try:
-                # Attempt to repair and parse JSON
-                action_json_str = repair_json(action_block)
-                action_dict = json.loads(action_json_str)
-                
-                log(f"⚡ Executing Action: {action_dict}")
-                
-                # 6. Execution
-                # Pass coordinate_map to executor
-                feedback = self.executor.execute(action_dict, coordinate_map)
-                log(f"✅ Feedback: {feedback}")
-                
-            except Exception as e:
-                feedback = f"Error parsing or executing action: {e}. Raw block: {action_block}"
-                log(f"❌ {feedback}")
-        else:
-            feedback = "Error: No valid <action> block found in response."
-            log(f"❌ {feedback}")
+        emit(
+            format_agent_loop(self.step_count, mouse_grid_id, full_response, tool_results, error=error),
+            format_agent_loop(self.step_count, mouse_grid_id, full_response, tool_results, error=error, width=DISPLAY_BOX_WIDTH),
+        )
 
         # 7. Memory
-        self.memory.add_step("assistant", full_response, log_callback=log)
-        self.memory.add_step("user", f"Execution Result: {feedback}", log_callback=log)
+        def memory_log(message):
+            emit(format_status_box("Memory", message), format_status_box("Memory", message, width=DISPLAY_BOX_WIDTH))
+
+        memory_content = "\n".join(part for part in [full_response, *tool_memory_parts] if part).strip()
+        assistant_log_extra = {"step": self.step_count}
+        user_log_extra = {"step": self.step_count}
+        if capture_files:
+            user_log_extra["images"] = capture_files
+        self.memory.add_interaction(
+            memory_content,
+            f"Execution Result: {feedback}",
+            tool=tool_log,
+            assistant_log_content=full_response,
+            assistant_log_extra=assistant_log_extra,
+            user_log_extra=user_log_extra,
+            log_callback=memory_log,
+        )
         
         return feedback
 

@@ -6,6 +6,86 @@ import json
 import os
 from datetime import datetime
 
+
+MEMORY_MANAGER_SYSTEM_PROMPT_TEMPLATE = """
+## Role
+You are the memory manager for Iris, a desktop GUI automation agent.
+
+## Objective
+Compress Iris's operational history into accurate, compact memory that can be reused in later GUI automation steps.
+
+## What Matters
+- The user's original goal.
+- What Iris observed or inferred about the UI state.
+- Actions Iris attempted, including important grid IDs, typed text, hotkeys, waits, clicks, and final answers.
+- Execution results, errors, blockers, and whether the task is complete.
+- Current unresolved state: what should be tried next, what should be avoided, and any relevant UI position or focus information.
+
+## What To Remove
+- Repeated wording, filler reasoning, decorative output formatting, and obvious restatements.
+- Raw image data or debug-only metadata.
+- Details that no longer affect future decisions.
+
+## Rules
+- Preserve chronological order.
+- Do not invent actions, results, UI state, or user intent.
+- Do not complete the user's task yourself.
+- Keep the summary dense but readable.
+
+## Original User Task
+```text
+{initial_task}
+```
+""".strip()
+
+
+SHORT_MEMORY_COMPRESSION_INSTRUCTIONS = """
+## Compression Task
+Summarize the provided recent interaction history into a concise operational memory paragraph.
+
+Include:
+- The latest known UI state.
+- The concrete actions taken and their results.
+- Any errors, failed attempts, or uncertainty.
+- The next relevant state or pending goal if the task is not finished.
+
+Format:
+`History Summary: ...`
+""".strip()
+
+
+LONG_MEMORY_COMPRESSION_INSTRUCTIONS = """
+## Compression Task
+Consolidate the provided historical summaries into one high-level long-term memory.
+
+Include:
+- Completed subtasks and durable facts about the UI workflow.
+- Important decisions, errors, or constraints that still matter.
+- The current pending goal or next useful direction, if any.
+
+Remove transient step-by-step detail that no longer helps future action selection.
+
+Format:
+`Long Term Memory: ...`
+""".strip()
+
+
+def build_memory_summary_user_prompt(instructions, memory_list):
+    history_lines = []
+    for index, step in enumerate(memory_list, start=1):
+        role = step.get("role", "unknown")
+        content = step.get("content", "")
+        history_lines.append(f"### Entry {index} ({role})\n{content}")
+
+    history = "\n\n".join(history_lines) if history_lines else "(No history provided.)"
+    return f"""
+{instructions}
+
+## History To Compress
+{history}
+""".strip()
+
+
 class HierarchicalMemory:
     def __init__(self, system_prompt, initial_task):
         self.system_prompt = system_prompt
@@ -17,10 +97,7 @@ class HierarchicalMemory:
         self.long_memory_layer = []
         self.short_memory_layer = []
         
-        self.client = OpenAI(
-            api_key=LLM_API_KEY,
-            base_url=LLM_API_ENDPOINT
-        )
+        self.client = OpenAI(**openai_client_kwargs())
 
         # Initialize debug log path
         if DEBUG_MODE:
@@ -38,59 +115,94 @@ class HierarchicalMemory:
         try:
             with open(self.debug_save_path, 'a', encoding='utf-8') as f:
                 for step in steps:
-                    f.write(json.dumps(step, ensure_ascii=False) + "\n")
+                    log_step = {
+                        "step": step.get("step", 0),
+                        "timestamp": datetime.now().isoformat(timespec="microseconds"),
+                    }
+                    for key, value in step.items():
+                        if key not in {"step", "timestamp"}:
+                            log_step[key] = value
+                    f.write(json.dumps(log_step, ensure_ascii=False) + "\n")
         except Exception as e:
             print(f"Failed to write to debug log: {e}")
 
-    def add_step(self, role, content, log_callback=None):
+    def add_step(self, role, content, tool=None, log_content=None, log_extra=None, log_callback=None, compress=True):
         """
-        Add a new step to short_memory_layer. Only record text steps and execution results.
+        Add a new step to short_memory_layer.
         """
         step = {"role": role, "content": content}
         self.short_memory_layer.append(step)
         
         # Append to debug log
         if DEBUG_MODE:
-            self._append_to_log([step])
+            log_step = {"role": role, "content": content if log_content is None else log_content}
+            if tool:
+                log_step["tool"] = tool
+            if log_extra:
+                log_step.update(log_extra)
+            self._append_to_log([log_step])
         
         # Check if compression is needed
-        if len(self.short_memory_layer) >= MAX_SHORT_MEMORY:
+        if compress:
             self.compress_context(log_callback)
 
-    def compress_memory(self, memory_list, prompt, max_tokens=None):
+    def add_interaction(
+        self,
+        assistant_content,
+        user_content,
+        tool=None,
+        assistant_log_content=None,
+        assistant_log_extra=None,
+        user_log_extra=None,
+        log_callback=None,
+    ):
+        self.add_step(
+            "assistant",
+            assistant_content,
+            tool=tool,
+            log_content=assistant_log_content,
+            log_extra=assistant_log_extra,
+            log_callback=log_callback,
+            compress=False,
+        )
+        self.add_step(
+            "user",
+            user_content,
+            log_extra=user_log_extra,
+            log_callback=log_callback,
+            compress=False,
+        )
+        self.compress_context(log_callback)
+
+    def estimate_tokens_for_text(self, text):
+        text = str(text)
+        ascii_chars = 0
+        non_ascii_tokens = 0
+        for char in text:
+            if ord(char) < 128:
+                ascii_chars += 1
+            elif char.isspace():
+                ascii_chars += 1
+            else:
+                non_ascii_tokens += 1
+
+        ascii_tokens = int(ascii_chars / max(1.0, MEMORY_CHARS_PER_TOKEN))
+        return max(1, ascii_tokens + non_ascii_tokens)
+
+    def estimate_tokens_for_steps(self, steps):
+        return sum(
+            self.estimate_tokens_for_text(step.get("role", "")) + self.estimate_tokens_for_text(step.get("content", ""))
+            for step in steps
+        )
+
+    def compress_memory(self, memory_list, instructions, max_tokens=None):
         """
         Compress memory list using LLM.
         """
-        system_prompt = f"""
-## Role
-You are the Memory Manager for an autonomous desktop agent.
-
-## Objective
-Your task is to compress the agent's operational history into concise summaries. These summaries allow the agent to retain context over long periods without exceeding token limits.
-
-## Guidelines
-- Be objective and precise.
-- Focus on **actions** (what was done) and **results** (what happened).
-- Remove redundant information.
-- Maintain chronological order.
-                                 
-## Background
-These conversation logs (which you need to summarize) were recorded during the process of addressing the following user request. 
-
-```text
-{self.initial_task}
-```
-
-Note that you are not tasked with answering or completing the user request above. Your role is a Memory Manager.
-"""
+        system_prompt = MEMORY_MANAGER_SYSTEM_PROMPT_TEMPLATE.format(initial_task=self.initial_task)
         messages_for_summary = [{"role": "system", "content": system_prompt}]
-        
-        # Convert steps to text format for summary
-        prompt = "\n\n## History\n"
-        for step in memory_list:
-            prompt += f"{step['role']}: {step['content']}\n\n"
-            
-        messages_for_summary.append({"role": "user", "content": prompt})
+        user_prompt = build_memory_summary_user_prompt(instructions, memory_list)
+        messages_for_summary.append({"role": "user", "content": user_prompt})
         
         response = self.client.chat.completions.create(
             model=LLM_MODEL_NAME,
@@ -109,28 +221,31 @@ Note that you are not tasked with answering or completing the user request above
             else:
                 print(msg)
 
-        log("⏳ Compressing short memory...")
+        short_tokens = self.estimate_tokens_for_steps(self.short_memory_layer)
+        if short_tokens <= MEMORY_SHORT_TOKEN_BUDGET:
+            return
 
-        # 1. Compress Short Memory -> Long Memory
-        # Take out the earliest COMPRESSION_RATIO steps
-        steps_to_compress = self.short_memory_layer[:COMPRESSION_RATIO]
-        self.short_memory_layer = self.short_memory_layer[COMPRESSION_RATIO:]
+        log(f"⏳ Compressing short memory ({short_tokens} estimated tokens)...")
+
+        keep_messages = max(0, MEMORY_RECENT_INTERACTIONS_TO_KEEP * 2)
+        if keep_messages and len(self.short_memory_layer) > keep_messages:
+            steps_to_compress = self.short_memory_layer[:-keep_messages]
+            self.short_memory_layer = self.short_memory_layer[-keep_messages:]
+        elif keep_messages:
+            return
+        else:
+            steps_to_compress = self.short_memory_layer
+            self.short_memory_layer = []
         
         try:
             summary = self.compress_memory(
                 steps_to_compress,
-                """
-## Instructions
-Summarize the provided interaction logs into a brief paragraph.
-- Identify the specific actions taken by the agent (e.g., clicking buttons, typing text).
-- Note the system's feedback or state changes.
-- Format as: "The agent [action] resulting in [outcome]."
-""",
+                SHORT_MEMORY_COMPRESSION_INSTRUCTIONS,
                 max_tokens=None
             )
             
             # Append summary to long_memory_layer
-            self.long_memory_layer.append({"role": "assistant", "content": f"History Summary: {summary}"})
+            self.long_memory_layer.append({"role": "assistant", "content": summary})
             log(f"✅ Short memory compressed. Summary: {summary[:100]}...")
             
         except Exception as e:
@@ -141,25 +256,20 @@ Summarize the provided interaction logs into a brief paragraph.
             return
 
         # 2. Check if Long Memory needs compression
-        if len(self.long_memory_layer) >= MAX_LONG_MEMORY:
-            log("⏳ Compressing long memory...")
+        long_tokens = self.estimate_tokens_for_steps(self.long_memory_layer)
+        if long_tokens >= MEMORY_LONG_TOKEN_BUDGET:
+            log(f"⏳ Compressing long memory ({long_tokens} estimated tokens)...")
             # Compress Long Memory
-            long_memories_to_compress = self.long_memory_layer[:COMPRESSION_RATIO]
-            self.long_memory_layer = self.long_memory_layer[COMPRESSION_RATIO:]
+            long_memories_to_compress = self.long_memory_layer
+            self.long_memory_layer = []
             
             try:
                 summary = self.compress_memory(
                     long_memories_to_compress,
-                    """
-## Instructions
-Consolidate the following historical summaries into a single high-level overview.
-- Focus on completed sub-tasks and major milestones.
-- Preserve any ongoing goals or pending errors that need resolution.
-- Discard transient details that are no longer relevant to the current state.
-""",
+                    LONG_MEMORY_COMPRESSION_INSTRUCTIONS,
                     max_tokens=None
                 )
-                self.long_memory_layer.insert(0, {"role": "assistant", "content": f"Long Term Memory: {summary}"})
+                self.long_memory_layer.insert(0, {"role": "assistant", "content": summary})
                 log(f"✅ Long memory compressed. Summary: {summary[:100]}...")
                 
             except Exception as e:
@@ -217,9 +327,6 @@ Consolidate the following historical summaries into a single high-level overview
 
 if __name__ == "__main__":
     # python -m scripts.memory
-    MAX_LONG_MEMORY = 2
-    MAX_SHORT_MEMORY = 2
-    COMPRESSION_RATIO = 2
     print("Testing HierarchicalMemory...")
     try:
         memory = HierarchicalMemory("System Prompt", "Initial Task")

@@ -1,6 +1,7 @@
 import time
 import os
 from datetime import datetime
+from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
 from scripts.config import *
 import pyautogui
@@ -10,6 +11,17 @@ import pyperclip
 # pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.1
 
+
+@lru_cache(maxsize=8)
+def _load_label_font(size):
+    for font_name in ("arial.ttf", "DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(font_name, size)
+        except IOError:
+            continue
+    return ImageFont.load_default()
+
+
 class VisionPerceptor:
     def __init__(self, pre_callback=None, post_callback=None):
         self.debug_dir = os.path.join(os.path.dirname(__file__), "debug", "screenshot")
@@ -17,6 +29,7 @@ class VisionPerceptor:
             os.makedirs(self.debug_dir)
         self.pre_callback = pre_callback
         self.post_callback = post_callback
+        self.last_capture_files = None
 
     def _draw_mouse(self, image, local_x, local_y, r=8):
         draw = ImageDraw.Draw(image)
@@ -27,7 +40,29 @@ class VisionPerceptor:
         draw.line((local_x, local_y-r, local_x, local_y+r), fill=MOUSE_COLOR, width=MOUSE_WIDTH)
         return image
 
-    def _draw_grid_with_labels(self, image, step, prefix, offset_x=0, offset_y=0):
+    def _draw_centered_text(self, draw, center_x, center_y, text, font, fill="black"):
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        draw.text(
+            (center_x - text_w / 2 - bbox[0], center_y - text_h / 2 - bbox[1]),
+            text,
+            fill=fill,
+            font=font,
+        )
+
+    def _draw_corner_prefix_labels(self, draw, prefix, padding, width, height, font):
+        label = str(prefix).upper()
+        centers = (
+            (padding // 2, padding // 2),
+            (width - padding // 2, padding // 2),
+            (padding // 2, height - padding // 2),
+            (width - padding // 2, height - padding // 2),
+        )
+        for center_x, center_y in centers:
+            self._draw_centered_text(draw, center_x, center_y, label, font, fill="black")
+
+    def _draw_grid_with_labels(self, image, step, prefix, offset_x=0, offset_y=0, clamp_bounds=None):
         """
         Draws a grid on the image and adds a white border with labels.
         Returns the processed image and a dictionary mapping IDs to GLOBAL coordinates.
@@ -37,9 +72,11 @@ class VisionPerceptor:
         :param prefix: 'G' for Global, 'L' for Local.
         :param offset_x: The global x-coordinate of the top-left corner of this image (for Local view).
         :param offset_y: The global y-coordinate of the top-left corner of this image (for Local view).
+        :param clamp_bounds: Optional (min_x, min_y, max_x, max_y) for clamping global coordinates.
         """
         width, height = image.size
-        padding = 40 # Width of the white border
+        font_size = 32 if prefix == "G" else 16
+        padding = 80 if prefix == "G" else 40
         
         # Create a new canvas with white border
         new_width = width + 2 * padding
@@ -50,12 +87,10 @@ class VisionPerceptor:
         canvas.paste(image, (padding, padding))
         draw = ImageDraw.Draw(canvas)
         
-        try:
-            font = ImageFont.truetype("arial.ttf", 16)
-        except IOError:
-            font = ImageFont.load_default()
+        font = _load_label_font(font_size)
 
         coordinate_map = {}
+        self._draw_corner_prefix_labels(draw, prefix, padding, new_width, new_height, font)
         
         # Draw vertical lines and X-axis labels
         col_index = 0
@@ -66,12 +101,10 @@ class VisionPerceptor:
             
             # Label on top border
             label = f"{col_index:02d}"
-            bbox = draw.textbbox((0, 0), label, font=font)
-            text_w = bbox[2] - bbox[0]
-            draw.text((draw_x - text_w // 2, 10), label, fill="black", font=font)
+            self._draw_centered_text(draw, draw_x, padding // 2, label, font, fill="black")
             
             # Label on bottom border
-            draw.text((draw_x - text_w // 2, new_height - padding + 10), label, fill="black", font=font)
+            self._draw_centered_text(draw, draw_x, new_height - padding // 2, label, font, fill="black")
             
             col_index += 1
 
@@ -84,12 +117,10 @@ class VisionPerceptor:
             
             # Label on left border
             label = f"{row_index:02d}"
-            bbox = draw.textbbox((0, 0), label, font=font)
-            text_h = bbox[3] - bbox[1]
-            draw.text((10, draw_y - text_h // 2), label, fill="black", font=font)
+            self._draw_centered_text(draw, padding // 2, draw_y, label, font, fill="black")
             
             # Label on right border
-            draw.text((new_width - padding + 10, draw_y - text_h // 2), label, fill="black", font=font)
+            self._draw_centered_text(draw, new_width - padding // 2, draw_y, label, font, fill="black")
             
             row_index += 1
 
@@ -102,83 +133,129 @@ class VisionPerceptor:
                 point_id = f"{prefix}-{c:02d}-{r:02d}"
                 
                 # Local coordinate on the image (not canvas)
-                local_img_x = c * step
-                local_img_y = r * step
+                local_img_x = min(c * step, max(0, width - 1))
+                local_img_y = min(r * step, max(0, height - 1))
                 
                 # Global coordinate
                 global_x = offset_x + local_img_x
                 global_y = offset_y + local_img_y
+                if clamp_bounds:
+                    min_x, min_y, max_x, max_y = clamp_bounds
+                    global_x = max(min_x, min(global_x, max_x))
+                    global_y = max(min_y, min(global_y, max_y))
                 
                 coordinate_map[point_id] = (global_x, global_y)
                 
         return canvas, coordinate_map
 
+    def _nearest_grid_id(self, x, y, width, height, step, prefix):
+        max_col = len(range(0, width + 1, step)) - 1
+        max_row = len(range(0, height + 1, step)) - 1
+        col = max(0, min(round(x / step), max_col))
+        row = max(0, min(round(y / step), max_row))
+        return f"{prefix}-{col:02d}-{row:02d}"
+
+    def _local_mouse_grid_position(self):
+        col = max(0, round((CROP_SIZE / 2) / LOCAL_GRID_STEP))
+        row = max(0, round((CROP_SIZE / 2) / LOCAL_GRID_STEP))
+        local_x = min(col * LOCAL_GRID_STEP, max(0, CROP_SIZE - 1))
+        local_y = min(row * LOCAL_GRID_STEP, max(0, CROP_SIZE - 1))
+        return col, row, local_x, local_y
+
+    def _crop_local_view(self, screenshot, mouse_x, mouse_y):
+        _, _, local_mouse_x, local_mouse_y = self._local_mouse_grid_position()
+        desired_left = mouse_x - local_mouse_x
+        desired_top = mouse_y - local_mouse_y
+        desired_right = desired_left + CROP_SIZE
+        desired_bottom = desired_top + CROP_SIZE
+
+        source_left = max(0, desired_left)
+        source_top = max(0, desired_top)
+        source_right = min(screenshot.width, desired_right)
+        source_bottom = min(screenshot.height, desired_bottom)
+
+        local_image = Image.new("RGB", (CROP_SIZE, CROP_SIZE), color=(240, 240, 240))
+        if source_left < source_right and source_top < source_bottom:
+            crop = screenshot.crop((source_left, source_top, source_right, source_bottom))
+            paste_x = source_left - desired_left
+            paste_y = source_top - desired_top
+            local_image.paste(crop, (paste_x, paste_y))
+
+        return local_image, desired_left, desired_top, local_mouse_x, local_mouse_y
+
     def capture_state(self, mouse_x, mouse_y):
+        self.last_capture_files = None
         if self.pre_callback:
             self.pre_callback()
 
-        # Capture screenshot
         try:
-            screenshot = pyautogui.screenshot()
-            
-            # Ensure mouse coordinates are within screenshot bounds
-            # This handles multi-monitor setups where mouse might be outside the primary screen
+            # Capture screenshot
+            try:
+                screenshot = pyautogui.screenshot()
+            except Exception as e:
+                raise RuntimeError(f"Unable to capture screenshot: {e}") from e
+
+            # Ensure mouse coordinates are within screenshot bounds.
+            # This handles multi-monitor setups where mouse might be outside the primary screen.
             mouse_x = max(0, min(mouse_x, screenshot.width - 1))
             mouse_y = max(0, min(mouse_y, screenshot.height - 1))
-            
-        except Exception as e:
-            print(f"Error capturing state: {e}")
-            screenshot = Image.new('RGB', (1920, 1080), color='black')
-            # mouse_x, mouse_y are passed in
-            
-        # 1. Generate Global View
-        # Global view uses GRID_STEP and prefix 'G'
-        global_image_raw = screenshot.copy()
-        
-        # Draw mouse on global view
-        self._draw_mouse(global_image_raw, mouse_x, mouse_y, r=16)
-        global_image, global_map = self._draw_grid_with_labels(global_image_raw, GRID_STEP, "G", 0, 0)
-        
-        # 2. Generate Local View
-        # Crop centered on mouse
-        crop_half = CROP_SIZE // 2
-        left = max(0, mouse_x - crop_half)
-        top = max(0, mouse_y - crop_half)
-        right = min(screenshot.width, mouse_x + crop_half)
-        bottom = min(screenshot.height, mouse_y + crop_half)
-        
-        local_image_raw = screenshot.crop((left, top, right, bottom))
-        
-        # Local view uses LOCAL_GRID_STEP and prefix 'L'
-        # Draw mouse on local view
-        # Mouse position relative to the crop
-        local_mouse_x = mouse_x - left
-        local_mouse_y = mouse_y - top
-        self._draw_mouse(local_image_raw, local_mouse_x, local_mouse_y, r=8)
-        # Pass (left, top) as offset so the map contains global coordinates
-        local_image, local_map = self._draw_grid_with_labels(local_image_raw, LOCAL_GRID_STEP, "L", left, top)
-        
-        # Merge maps
-        full_coordinate_map = {**global_map, **local_map}
 
-        # Calculate mouse grid ID in Local View
-        # local_mouse_x and local_mouse_y are already calculated above
-        col = round(local_mouse_x / LOCAL_GRID_STEP)
-        row = round(local_mouse_y / LOCAL_GRID_STEP)
-        mouse_grid_id = f"L-{col:02d}-{row:02d}"
+            # 1. Generate Global View
+            # Global view uses GRID_STEP and prefix 'G'
+            global_image_raw = screenshot.copy()
 
-        # Debug archive
-        if DEBUG_MODE:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            global_path = os.path.join(self.debug_dir, f"global_{timestamp}.png")
-            local_path = os.path.join(self.debug_dir, f"local_{timestamp}.png")
-            global_image.save(global_path)
-            local_image.save(local_path)
+            # Draw mouse on global view
+            self._draw_mouse(global_image_raw, mouse_x, mouse_y, r=16)
+            global_image, global_map = self._draw_grid_with_labels(global_image_raw, GRID_STEP, "G", 0, 0)
 
-        if self.post_callback:
-            self.post_callback()
+            # 2. Generate Local View. Off-screen padding keeps the cursor on an exact L grid point.
+            local_image_raw, left, top, local_mouse_x, local_mouse_y = self._crop_local_view(screenshot, mouse_x, mouse_y)
 
-        return global_image, local_image, full_coordinate_map, mouse_grid_id
+            # Local view uses LOCAL_GRID_STEP and prefix 'L'
+            # Draw mouse on local view
+            # Mouse position relative to the crop
+            self._draw_mouse(local_image_raw, local_mouse_x, local_mouse_y, r=8)
+            # Pass (left, top) as offset so the map contains global coordinates
+            local_image, local_map = self._draw_grid_with_labels(
+                local_image_raw,
+                LOCAL_GRID_STEP,
+                "L",
+                left,
+                top,
+                clamp_bounds=(0, 0, screenshot.width - 1, screenshot.height - 1),
+            )
+
+            # Merge maps
+            full_coordinate_map = {**global_map, **local_map}
+
+            # Calculate mouse grid ID in Local View
+            # local_mouse_x and local_mouse_y are already calculated above
+            col, row, _, _ = self._local_mouse_grid_position()
+            mouse_grid_id = f"L-{col:02d}-{row:02d}"
+            nearest_global_grid_id = self._nearest_grid_id(
+                mouse_x,
+                mouse_y,
+                screenshot.width,
+                screenshot.height,
+                GRID_STEP,
+                "G",
+            )
+
+            # Debug archive
+            if DEBUG_MODE:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                global_file = f"global_{timestamp}.png"
+                local_file = f"local_{timestamp}.png"
+                global_path = os.path.join(self.debug_dir, global_file)
+                local_path = os.path.join(self.debug_dir, local_file)
+                global_image.save(global_path)
+                local_image.save(local_path)
+                self.last_capture_files = {"global": global_file, "local": local_file}
+
+            return global_image, local_image, full_coordinate_map, mouse_grid_id, nearest_global_grid_id
+        finally:
+            if self.post_callback:
+                self.post_callback()
 
 
 class ActionExecutor:
@@ -188,7 +265,7 @@ class ActionExecutor:
         # Initialize mouse position
         try:
             self.mouse_x, self.mouse_y = pyautogui.position()
-        except:
+        except pyautogui.PyAutoGUIException:
             self.mouse_x, self.mouse_y = 0, 0
 
     def get_mouse_position(self):
@@ -223,9 +300,16 @@ class ActionExecutor:
     def execute(self, action_dict, coordinate_map=None):
         if self.pre_callback:
             self.pre_callback()
+        try:
+            return self._execute_action(action_dict, coordinate_map)
+        finally:
+            if self.post_callback:
+                self.post_callback()
+            if ACTION_SETTLE_SECONDS > 0 and action_dict.get("action_type") != "wait":
+                time.sleep(ACTION_SETTLE_SECONDS)
 
+    def _execute_action(self, action_dict, coordinate_map=None):
         action_type = action_dict.get("action_type")
-        
         result = ""
         try:
             if action_type == "move":
@@ -240,7 +324,7 @@ class ActionExecutor:
                     pyautogui.moveTo(x, y, duration=duration, tween=pyautogui.easeInOutQuad)
                     # Update internal mouse position
                     self.mouse_x, self.mouse_y = x, y
-                    return f"Action move to {point_id} ({x}, {y}) executed."
+                    return f"Action move to {point_id} executed."
                 else:
                     return f"Error: Point ID '{point_id}' not found in coordinate map."
 
@@ -267,14 +351,7 @@ class ActionExecutor:
             elif action_type == "scroll":
                 direction = action_dict.get("direction", "down")
                 amount_str = action_dict.get("amount", "line")
-                
-                clicks = 0
-                if amount_str == "line":
-                    clicks = 100
-                elif amount_str == "half":
-                    clicks = 500
-                elif amount_str == "page":
-                    clicks = 1000
+                clicks = self._scroll_clicks(amount_str)
                 
                 if direction == "up":
                     pyautogui.scroll(clicks)
@@ -290,16 +367,7 @@ class ActionExecutor:
             elif action_type == "type":
                 text = action_dict.get("text", "")
                 submit = action_dict.get("submit", False)
-                
-                # Check if text contains non-ASCII characters (e.g. Chinese)
-                if all(ord(c) < 128 for c in text):
-                    pyautogui.write(text, interval=0.05)
-                else:
-                    pyperclip.copy(text)
-                    time.sleep(0.1)
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.1)
-                
+                self._type_text(text)
                 if submit:
                     pyautogui.press("enter")
                 return f"Action type '{text}' executed."
@@ -324,12 +392,43 @@ class ActionExecutor:
 
         except Exception as e:
             result = f"Error executing action {action_type}: {str(e)}"
-        
-        if self.post_callback:
-            self.post_callback()
-        
-        time.sleep(1) # In case the screen hasn't changed yet
         return result
+
+    def _scroll_clicks(self, amount):
+        if amount == "line":
+            return SCROLL_LINE_CLICKS
+        if amount == "half":
+            return SCROLL_HALF_CLICKS
+        if amount == "page":
+            return SCROLL_PAGE_CLICKS
+        return SCROLL_LINE_CLICKS
+
+    def _type_text(self, text):
+        if not text:
+            return
+        should_paste = len(text) >= CLIPBOARD_TEXT_THRESHOLD or any(ord(c) >= 128 for c in text)
+        if not should_paste:
+            pyautogui.write(text, interval=TYPE_INTERVAL_SECONDS)
+            return
+
+        previous_clipboard = None
+        has_previous_clipboard = False
+        try:
+            previous_clipboard = pyperclip.paste()
+            has_previous_clipboard = True
+        except pyperclip.PyperclipException:
+            pass
+
+        pyperclip.copy(text)
+        time.sleep(0.05)
+        pyautogui.hotkey('ctrl', 'v')
+        time.sleep(0.05)
+
+        if has_previous_clipboard:
+            try:
+                pyperclip.copy(previous_clipboard)
+            except pyperclip.PyperclipException:
+                pass
 
 if __name__ == "__main__":
     # python -m scripts.tools
@@ -340,12 +439,13 @@ if __name__ == "__main__":
         print("Testing VisionPerceptor...")
         vision = VisionPerceptor()
         # Need to pass mouse coordinates now
-        global_img, local_img, coord_map, mouse_id = vision.capture_state(500, 500)
+        global_img, local_img, coord_map, mouse_id, nearest_global_id = vision.capture_state(500, 500)
         print(f"Capture successful.")
         print(f"Global size: {global_img.size}")
         print(f"Local size: {local_img.size}")
         print(f"Map size: {len(coord_map)}")
         print(f"Mouse ID: {mouse_id}")
+        print(f"Nearest Global ID: {nearest_global_id}")
         print(f"Sample G point: {list(coord_map.keys())[0]} -> {list(coord_map.values())[0]}")
     except Exception as e:
         print(f"VisionPerceptor test failed: {e}")

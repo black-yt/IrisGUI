@@ -1,7 +1,7 @@
 pyautogui
 pillow
-json_repair
 openai
 pynput
 python-dotenv
 pyperclip
+prompt_toolkit

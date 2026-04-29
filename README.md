@@ -116,13 +116,23 @@ Create a `.env` file in the root directory (copy from [`.env.example`](.env.exam
 ```ini
 LLM_API_ENDPOINT="https://base-url/v1"
 LLM_API_KEY="sk-your-api-key-here"
-LLM_MODEL_NAME="gemini-3-pro"
+LLM_MODEL_NAME="gemini-3.1-pro-preview"
+LLM_TIMEOUT_SECONDS=0
+LLM_MAX_RETRIES=1
+MEMORY_SHORT_TOKEN_BUDGET=128000
+MEMORY_LONG_TOKEN_BUDGET=128000
 ```
 
 ### 4. Run Iris
 ```bash
 python main.py
 ```
+
+The terminal editor opens in a colored framed task input panel before the task starts. Type the task directly, use **Up/Down** to choose **New Line**, **Start Now**, **Start After 5s**, **Start After Custom Delay**, **Clear**, or **Exit**, then press **Enter** to confirm the selected action. **New Line** is selected by default, so pressing **Enter** normally inserts a line break. For custom delay, enter the number of seconds in the delay field, then confirm **Start After Custom Delay**.
+
+Iris uses native tool calling for GUI actions. It can execute multiple tool calls in one model turn only when they are safe consecutive actions that do not depend on UI loading or a fresh screenshot.
+
+Each agent loop is shown as a color-coded structured box in both the terminal and the floating screen log, with separate sections for perception, model reasoning, tool calls, and feedback.
 
 > **💡 Tip:** To stop Iris in an emergency, press **ESC** three times quickly! 🛑
 

@@ -4,7 +4,8 @@ import os
 import sys
 from pynput import keyboard
 from scripts.agent import IrisAgent
-from scripts.utils import DisplayWindow, print_boxed, logo
+from scripts.terminal_input import prompt_for_task
+from scripts.utils import DISPLAY_BOX_WIDTH, DisplayWindow, colorize_terminal, format_status_box, print_boxed, logo
 
 
 class IrisController:
@@ -53,7 +54,11 @@ class IrisController:
         thread.start()
 
     def run_agent(self, task):
-        self.log(f"Starting task: {task}")
+        start_message = format_status_box("Task", f"Starting task:\n{task}")
+        window_start_message = format_status_box("Task", f"Starting task:\n{task}", width=DISPLAY_BOX_WIDTH)
+        print(colorize_terminal(start_message), flush=True)
+        self.log(window_start_message + "\n")
+        final_feedback = None
         try:
             def pre_callback():
                 # Hide window before screenshot
@@ -70,7 +75,6 @@ class IrisController:
             # DEBUG_MODE only affects internal logic like saving screenshots (controlled by scripts.config)
             self.agent = IrisAgent(task, pre_callback=pre_callback, post_callback=post_callback)
             
-            final_feedback = None
             while self.running:
                 # Execute one step
                 feedback = self.agent.step(
@@ -83,51 +87,31 @@ class IrisController:
                     break
                 
         except Exception as e:
-            self.log(f"Error: {e}")
-            print_boxed(f"Error: {e}") # Also print to console just in case
+            error_message = format_status_box("Error", f"Error: {e}")
+            window_error_message = format_status_box("Error", f"Error: {e}", width=DISPLAY_BOX_WIDTH)
+            self.log(window_error_message + "\n")
+            print(colorize_terminal(error_message), flush=True)
         finally:
             self.running = False
-            self.log("\nTask finished.")
+            self.log(format_status_box("Task Finished", "Task finished.", width=DISPLAY_BOX_WIDTH) + "\n")
             if final_feedback:
                 print_boxed(f"Final Result:\n{final_feedback}")
             
             # Ensure window is visible and prompt for exit
             self.window.safe_unhide()
-            self.log("\nPress ESC 3 times to exit the program.")
+            self.log(format_status_box("Exit", "Press ESC 3 times to exit the program.", width=DISPLAY_BOX_WIDTH) + "\n")
             print_boxed("Task finished. Press ESC 3 times to exit.")
 
     def start(self):
         self.window.start_loop()
 
-def print_banner():
-    print(logo.strip())
-    instructions = """
-Enter the task (line breaks are supported)
-After entering the task, type [START] and press Enter to start.
-"""
-    print_boxed(instructions)
-
-def get_multiline_input():
-    lines = []
-    while True:
-        try:
-            line = input()
-            if "[START]" in line:
-                # If [START] is in this line, keep the content before [START] (if any)
-                # Or simply consider this line as the end signal
-                # The requirement is "The user needs to enter the [START] symbol at the end to start the task"
-                # We can remove [START] and take the preceding part, or if [START] occupies a line alone, end it
-                parts = line.split("[START]")
-                if parts[0].strip():
-                    lines.append(parts[0])
-                break
-            lines.append(line)
-        except EOFError:
-            break
-    return "\n".join(lines)
-
 def wait_with_countdown(seconds):
-    print_boxed(f"You have {seconds} seconds to set the screen to the task start state. If you press Enter, the task will start immediately.")
+    if seconds <= 0:
+        print_boxed("Starting task now.")
+        return
+
+    seconds_text = f"{seconds:g}"
+    print_boxed(f"You have {seconds_text} seconds to set the screen to the task start state. If you press Enter, the task will start immediately.")
     
     stop_event = threading.Event()
     
@@ -164,15 +148,13 @@ if __name__ == "__main__":
         print_boxed('No display found. Cannot run GUI.')
         sys.exit(1)
 
-    print_banner()
+    task_prompt = prompt_for_task(logo)
     
-    task_description = get_multiline_input()
-    
-    if not task_description.strip():
-        print_boxed("Task description is empty, exiting.")
+    if task_prompt is None or not task_prompt.text.strip():
+        print_boxed("No task selected, exiting.")
         sys.exit(0)
         
-    wait_with_countdown(5)
+    wait_with_countdown(task_prompt.delay_seconds)
         
-    app = IrisController(task_description)
+    app = IrisController(task_prompt.text)
     app.start()
