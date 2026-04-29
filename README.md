@@ -79,6 +79,12 @@ A **dynamic focusing view** strategy is adopted to improve positioning accuracy 
 
 ## 🎞️ Demos
 
+* **Task**: `在浏览器中搜索“多模态大模型的基本原理与应用”等相关主题信息，对检索到的内容进行整理与归纳，并撰写一份结构清晰的中文Word文档（包含标题、分节与要点说明）。将该文档创建在桌面上，命名为“多模态报告.docx”。随后打开Google Translate网页，将该Word文档上传至文档翻译功能，选择中文到英文的翻译选项，等待系统生成翻译结果后下载英文版本文件，并使用Word打开检查翻译内容与格式是否正确。`
+
+https://github.com/user-attachments/assets/ab8ca64b-2878-452f-a6ac-32f58bbb6ae7
+
+<br>
+
 * **Task**: `玩一局植物大战僵尸`
 
 https://github.com/user-attachments/assets/097baadc-e01f-441c-973d-f1260656d19a
