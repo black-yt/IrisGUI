@@ -35,6 +35,8 @@ Powered by a robust **ReAct (Reasoning + Acting)** loop, Iris can handle complex
 
 ## 🆕 Latest News
 
+🚩 **Update** (2026-04-29) Iris now supports OpenAI-compatible native tool calling, safe multi-tool GUI actions, a cross-platform terminal task launcher, structured loop output, traceable debug logs, and token-based memory compression.
+
 🚩 **Update** (2026-01-18) We release **Iris-v1.0**.
 
 ---
