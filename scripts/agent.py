@@ -201,14 +201,14 @@ class IrisAgent:
         except Exception as e:
             error = f"Error during LLM inference: {e}"
             emit(
-                format_agent_loop(self.step_count, mouse_grid_id, full_response, tool_results, error=error),
-                format_agent_loop(self.step_count, mouse_grid_id, full_response, tool_results, error=error, width=DISPLAY_BOX_WIDTH),
+                format_agent_loop(self.step_count, mouse_grid_id, nearest_global_grid_id, full_response, tool_results, error=error),
+                format_agent_loop(self.step_count, mouse_grid_id, nearest_global_grid_id, full_response, tool_results, error=error, width=DISPLAY_BOX_WIDTH),
             )
             return f"Error: {e}"
 
         emit(
-            format_agent_loop(self.step_count, mouse_grid_id, full_response, tool_results, error=error),
-            format_agent_loop(self.step_count, mouse_grid_id, full_response, tool_results, error=error, width=DISPLAY_BOX_WIDTH),
+            format_agent_loop(self.step_count, mouse_grid_id, nearest_global_grid_id, full_response, tool_results, error=error),
+            format_agent_loop(self.step_count, mouse_grid_id, nearest_global_grid_id, full_response, tool_results, error=error, width=DISPLAY_BOX_WIDTH),
         )
 
         # 7. Memory

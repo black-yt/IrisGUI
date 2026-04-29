@@ -16,6 +16,7 @@ class OutputFormattingTests(unittest.TestCase):
         rendered = format_agent_loop(
             step=3,
             mouse_grid_id="L-02-04",
+            nearest_global_grid_id="G-08-06",
             reasoning="The input field is already focused, so typing is safe.",
             tool_results=[
                 {
@@ -28,6 +29,12 @@ class OutputFormattingTests(unittest.TestCase):
 
         self.assertIn("Iris Agent Loop · Step 3", rendered)
         self.assertIn("Perception", rendered)
+        self.assertIn("Nearby global mouse grid: G-08-06", rendered)
+        self.assertIn("Current local mouse grid: L-02-04", rendered)
+        self.assertLess(
+            rendered.index("Nearby global mouse grid: G-08-06"),
+            rendered.index("Current local mouse grid: L-02-04"),
+        )
         self.assertIn("Model Reasoning", rendered)
         self.assertIn("Tool Calls", rendered)
         self.assertIn("Feedback", rendered)

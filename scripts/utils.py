@@ -147,7 +147,7 @@ def _classify_output_line(line, current_section=None):
             style = "success"
         elif current_section == "Tool Calls":
             style = "tool"
-        elif "Screen captured" in inner or "Current mouse grid" in inner:
+        elif "Screen captured" in inner or "Nearby global mouse grid" in inner or "Current local mouse grid" in inner:
             style = "muted"
 
     return {"kind": "content" if is_box_content else "plain", "text": content, "style": style}, next_section
@@ -200,7 +200,16 @@ def _format_action(action):
     return f"{action_type}({rendered_args})"
 
 
-def format_agent_loop(step, mouse_grid_id, reasoning="", tool_results=None, error=None, width=None, measure=get_display_width):
+def format_agent_loop(
+    step,
+    mouse_grid_id,
+    nearest_global_grid_id=None,
+    reasoning="",
+    tool_results=None,
+    error=None,
+    width=None,
+    measure=get_display_width,
+):
     content_width = width or _terminal_content_width()
     title = f"Iris Agent Loop · Step {step}"
     lines = [
@@ -214,7 +223,8 @@ def format_agent_loop(step, mouse_grid_id, reasoning="", tool_results=None, erro
         "Perception",
         [
             "Screen captured: Global View + Local View",
-            f"Current mouse grid: {mouse_grid_id}",
+            f"Nearby global mouse grid: {nearest_global_grid_id or '-'}",
+            f"Current local mouse grid: {mouse_grid_id}",
         ],
         content_width,
         measure=measure,
