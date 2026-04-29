@@ -64,15 +64,15 @@ class VisionGridLabelTests(unittest.TestCase):
         self.assertEqual(perceptor._nearest_grid_id(490, 290, 500, 300, 100, "G"), "G-05-03")
         self.assertEqual(perceptor._nearest_grid_id(-10, -10, 500, 300, 100, "G"), "G-00-00")
 
-    def test_local_crop_keeps_mouse_on_exact_local_grid_point_at_screen_edges(self):
+    def test_local_crop_stops_at_screen_edges_without_padding(self):
         perceptor = tools.VisionPerceptor.__new__(tools.VisionPerceptor)
         screenshot = Image.new("RGB", (500, 300), color="white")
 
         local_image, left, top, local_mouse_x, local_mouse_y = perceptor._crop_local_view(screenshot, 149, 51)
 
-        self.assertEqual(local_image.size, (tools.CROP_SIZE, tools.CROP_SIZE))
-        self.assertEqual((local_mouse_x, local_mouse_y), (200, 200))
-        self.assertEqual((left, top), (-51, -149))
+        self.assertEqual(local_image.size, (349, 251))
+        self.assertEqual((local_mouse_x, local_mouse_y), (149, 51))
+        self.assertEqual((left, top), (0, 0))
 
     def test_capture_state_restores_callback_when_screenshot_fails(self):
         events = []
@@ -117,10 +117,12 @@ class VisionGridLabelTests(unittest.TestCase):
         with patch("scripts.tools.pyautogui.screenshot", return_value=Image.new("RGB", (500, 300), color="white")):
             _, local_image, coordinate_map, mouse_grid_id, nearest_global_grid_id = perceptor.capture_state(149, 51)
 
-        self.assertEqual(local_image.size, (tools.CROP_SIZE + 80, tools.CROP_SIZE + 80))
-        self.assertEqual(mouse_grid_id, "L-10-10")
+        self.assertEqual(local_image.size, (429, 331))
+        self.assertEqual(mouse_grid_id, "L-07-03")
         self.assertEqual(nearest_global_grid_id, "G-01-01")
-        self.assertEqual(coordinate_map[mouse_grid_id], (149, 51))
+        grid_x, grid_y = coordinate_map[mouse_grid_id]
+        self.assertLessEqual(abs(grid_x - 149), tools.LOCAL_GRID_STEP // 2)
+        self.assertLessEqual(abs(grid_y - 51), tools.LOCAL_GRID_STEP // 2)
         self.assertEqual(events, ["pre", "post"])
 
     def _corner_center(self, image, center_x, center_y, half_size=10):

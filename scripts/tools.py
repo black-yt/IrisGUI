@@ -62,7 +62,7 @@ class VisionPerceptor:
         for center_x, center_y in centers:
             self._draw_centered_text(draw, center_x, center_y, label, font, fill="black")
 
-    def _draw_grid_with_labels(self, image, step, prefix, offset_x=0, offset_y=0, clamp_bounds=None):
+    def _draw_grid_with_labels(self, image, step, prefix, offset_x=0, offset_y=0):
         """
         Draws a grid on the image and adds a white border with labels.
         Returns the processed image and a dictionary mapping IDs to GLOBAL coordinates.
@@ -72,7 +72,6 @@ class VisionPerceptor:
         :param prefix: 'G' for Global, 'L' for Local.
         :param offset_x: The global x-coordinate of the top-left corner of this image (for Local view).
         :param offset_y: The global y-coordinate of the top-left corner of this image (for Local view).
-        :param clamp_bounds: Optional (min_x, min_y, max_x, max_y) for clamping global coordinates.
         """
         width, height = image.size
         font_size = 32 if prefix == "G" else 16
@@ -131,21 +130,17 @@ class VisionPerceptor:
             for r in range(row_index):
                 # ID format: PREFIX-XX-YY
                 point_id = f"{prefix}-{c:02d}-{r:02d}"
-                
+
                 # Local coordinate on the image (not canvas)
                 local_img_x = min(c * step, max(0, width - 1))
                 local_img_y = min(r * step, max(0, height - 1))
-                
+
                 # Global coordinate
                 global_x = offset_x + local_img_x
                 global_y = offset_y + local_img_y
-                if clamp_bounds:
-                    min_x, min_y, max_x, max_y = clamp_bounds
-                    global_x = max(min_x, min(global_x, max_x))
-                    global_y = max(min_y, min(global_y, max_y))
-                
+
                 coordinate_map[point_id] = (global_x, global_y)
-                
+
         return canvas, coordinate_map
 
     def _nearest_grid_id(self, x, y, width, height, step, prefix):
@@ -155,33 +150,17 @@ class VisionPerceptor:
         row = max(0, min(round(y / step), max_row))
         return f"{prefix}-{col:02d}-{row:02d}"
 
-    def _local_mouse_grid_position(self):
-        col = max(0, round((CROP_SIZE / 2) / LOCAL_GRID_STEP))
-        row = max(0, round((CROP_SIZE / 2) / LOCAL_GRID_STEP))
-        local_x = min(col * LOCAL_GRID_STEP, max(0, CROP_SIZE - 1))
-        local_y = min(row * LOCAL_GRID_STEP, max(0, CROP_SIZE - 1))
-        return col, row, local_x, local_y
-
     def _crop_local_view(self, screenshot, mouse_x, mouse_y):
-        _, _, local_mouse_x, local_mouse_y = self._local_mouse_grid_position()
-        desired_left = mouse_x - local_mouse_x
-        desired_top = mouse_y - local_mouse_y
-        desired_right = desired_left + CROP_SIZE
-        desired_bottom = desired_top + CROP_SIZE
+        crop_half = CROP_SIZE // 2
+        left = max(0, mouse_x - crop_half)
+        top = max(0, mouse_y - crop_half)
+        right = min(screenshot.width, mouse_x + crop_half)
+        bottom = min(screenshot.height, mouse_y + crop_half)
 
-        source_left = max(0, desired_left)
-        source_top = max(0, desired_top)
-        source_right = min(screenshot.width, desired_right)
-        source_bottom = min(screenshot.height, desired_bottom)
-
-        local_image = Image.new("RGB", (CROP_SIZE, CROP_SIZE), color=(240, 240, 240))
-        if source_left < source_right and source_top < source_bottom:
-            crop = screenshot.crop((source_left, source_top, source_right, source_bottom))
-            paste_x = source_left - desired_left
-            paste_y = source_top - desired_top
-            local_image.paste(crop, (paste_x, paste_y))
-
-        return local_image, desired_left, desired_top, local_mouse_x, local_mouse_y
+        local_image = screenshot.crop((left, top, right, bottom))
+        local_mouse_x = mouse_x - left
+        local_mouse_y = mouse_y - top
+        return local_image, left, top, local_mouse_x, local_mouse_y
 
     def capture_state(self, mouse_x, mouse_y):
         self.last_capture_files = None
@@ -208,7 +187,7 @@ class VisionPerceptor:
             self._draw_mouse(global_image_raw, mouse_x, mouse_y, r=16)
             global_image, global_map = self._draw_grid_with_labels(global_image_raw, GRID_STEP, "G", 0, 0)
 
-            # 2. Generate Local View. Off-screen padding keeps the cursor on an exact L grid point.
+            # 2. Generate Local View. The crop stops at the screen edge; no off-screen area is padded.
             local_image_raw, left, top, local_mouse_x, local_mouse_y = self._crop_local_view(screenshot, mouse_x, mouse_y)
 
             # Local view uses LOCAL_GRID_STEP and prefix 'L'
@@ -222,7 +201,6 @@ class VisionPerceptor:
                 "L",
                 left,
                 top,
-                clamp_bounds=(0, 0, screenshot.width - 1, screenshot.height - 1),
             )
 
             # Merge maps
@@ -230,8 +208,14 @@ class VisionPerceptor:
 
             # Calculate mouse grid ID in Local View
             # local_mouse_x and local_mouse_y are already calculated above
-            col, row, _, _ = self._local_mouse_grid_position()
-            mouse_grid_id = f"L-{col:02d}-{row:02d}"
+            mouse_grid_id = self._nearest_grid_id(
+                local_mouse_x,
+                local_mouse_y,
+                local_image_raw.width,
+                local_image_raw.height,
+                LOCAL_GRID_STEP,
+                "L",
+            )
             nearest_global_grid_id = self._nearest_grid_id(
                 mouse_x,
                 mouse_y,
