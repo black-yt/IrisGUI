@@ -1,5 +1,6 @@
 import time
 import os
+import math
 from datetime import datetime
 from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
@@ -62,7 +63,18 @@ class VisionPerceptor:
         for center_x, center_y in centers:
             self._draw_centered_text(draw, center_x, center_y, label, font, fill="black")
 
-    def _draw_grid_with_labels(self, image, step, prefix, offset_x=0, offset_y=0):
+    def _draw_grid_with_labels(
+        self,
+        image,
+        step,
+        prefix,
+        offset_x=0,
+        offset_y=0,
+        anchor_x=0,
+        anchor_y=0,
+        anchor_col=0,
+        anchor_row=0,
+    ):
         """
         Draws a grid on the image and adds a white border with labels.
         Returns the processed image and a dictionary mapping IDs to GLOBAL coordinates.
@@ -72,6 +84,10 @@ class VisionPerceptor:
         :param prefix: 'G' for Global, 'L' for Local.
         :param offset_x: The global x-coordinate of the top-left corner of this image (for Local view).
         :param offset_y: The global y-coordinate of the top-left corner of this image (for Local view).
+        :param anchor_x: X coordinate where the grid starts expanding from.
+        :param anchor_y: Y coordinate where the grid starts expanding from.
+        :param anchor_col: Column label assigned to anchor_x.
+        :param anchor_row: Row label assigned to anchor_y.
         """
         width, height = image.size
         font_size = 32 if prefix == "G" else 16
@@ -90,10 +106,12 @@ class VisionPerceptor:
 
         coordinate_map = {}
         self._draw_corner_prefix_labels(draw, prefix, padding, new_width, new_height, font)
-        
+
+        columns = self._grid_axis_positions(anchor_x, width, step, anchor_col)
+        rows = self._grid_axis_positions(anchor_y, height, step, anchor_row)
+
         # Draw vertical lines and X-axis labels
-        col_index = 0
-        for x in range(0, width+1, step):
+        for col_index, x in columns:
             # Line on the image
             draw_x = x + padding
             draw.line([(draw_x, padding), (draw_x, new_height - padding)], fill=GRID_COLOR, width=GRID_WIDTH)
@@ -104,12 +122,9 @@ class VisionPerceptor:
             
             # Label on bottom border
             self._draw_centered_text(draw, draw_x, new_height - padding // 2, label, font, fill="black")
-            
-            col_index += 1
 
         # Draw horizontal lines and Y-axis labels
-        row_index = 0
-        for y in range(0, height+1, step):
+        for row_index, y in rows:
             # Line on the image
             draw_y = y + padding
             draw.line([(padding, draw_y), (new_width - padding, draw_y)], fill=GRID_COLOR, width=GRID_WIDTH)
@@ -120,20 +135,18 @@ class VisionPerceptor:
             
             # Label on right border
             self._draw_centered_text(draw, new_width - padding // 2, draw_y, label, font, fill="black")
-            
-            row_index += 1
 
         # Generate Coordinate Map
         # Re-iterate to populate map (or do it in the loops above, but nested is easier for map)
-        
-        for c in range(col_index): # Use actual count from loop
-            for r in range(row_index):
+
+        for c, x in columns:
+            for r, y in rows:
                 # ID format: PREFIX-XX-YY
                 point_id = f"{prefix}-{c:02d}-{r:02d}"
 
                 # Local coordinate on the image (not canvas)
-                local_img_x = min(c * step, max(0, width - 1))
-                local_img_y = min(r * step, max(0, height - 1))
+                local_img_x = min(x, max(0, width - 1))
+                local_img_y = min(y, max(0, height - 1))
 
                 # Global coordinate
                 global_x = offset_x + local_img_x
@@ -142,6 +155,19 @@ class VisionPerceptor:
                 coordinate_map[point_id] = (global_x, global_y)
 
         return canvas, coordinate_map
+
+    def _grid_axis_positions(self, anchor, size, step, anchor_index):
+        min_delta = math.ceil((0 - anchor) / step)
+        max_delta = math.floor((size - anchor) / step)
+        positions = []
+        for delta in range(min_delta, max_delta + 1):
+            index = anchor_index + delta
+            if index < 0:
+                continue
+            pos = anchor + delta * step
+            if 0 <= pos <= size:
+                positions.append((index, pos))
+        return positions
 
     def _nearest_grid_id(self, x, y, width, height, step, prefix):
         max_col = len(range(0, width + 1, step)) - 1
@@ -161,6 +187,11 @@ class VisionPerceptor:
         local_mouse_x = mouse_x - left
         local_mouse_y = mouse_y - top
         return local_image, left, top, local_mouse_x, local_mouse_y
+
+    def _local_mouse_grid_id(self):
+        col = max(0, round((CROP_SIZE / 2) / LOCAL_GRID_STEP))
+        row = max(0, round((CROP_SIZE / 2) / LOCAL_GRID_STEP))
+        return f"L-{col:02d}-{row:02d}", col, row
 
     def capture_state(self, mouse_x, mouse_y):
         self.last_capture_files = None
@@ -189,6 +220,7 @@ class VisionPerceptor:
 
             # 2. Generate Local View. The crop stops at the screen edge; no off-screen area is padded.
             local_image_raw, left, top, local_mouse_x, local_mouse_y = self._crop_local_view(screenshot, mouse_x, mouse_y)
+            mouse_grid_id, local_mouse_col, local_mouse_row = self._local_mouse_grid_id()
 
             # Local view uses LOCAL_GRID_STEP and prefix 'L'
             # Draw mouse on local view
@@ -201,21 +233,15 @@ class VisionPerceptor:
                 "L",
                 left,
                 top,
+                anchor_x=local_mouse_x,
+                anchor_y=local_mouse_y,
+                anchor_col=local_mouse_col,
+                anchor_row=local_mouse_row,
             )
 
             # Merge maps
             full_coordinate_map = {**global_map, **local_map}
 
-            # Calculate mouse grid ID in Local View
-            # local_mouse_x and local_mouse_y are already calculated above
-            mouse_grid_id = self._nearest_grid_id(
-                local_mouse_x,
-                local_mouse_y,
-                local_image_raw.width,
-                local_image_raw.height,
-                LOCAL_GRID_STEP,
-                "L",
-            )
             nearest_global_grid_id = self._nearest_grid_id(
                 mouse_x,
                 mouse_y,

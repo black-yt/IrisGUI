@@ -45,11 +45,10 @@ class PromptTests(unittest.TestCase):
         )
         self.assertLess(
             query.index("not necessarily on this Global View point"),
-            query.index("cursor's precise visual position is the crosshair"),
+            query.index("cursor is precisely on this Local View point"),
         )
         self.assertIn("updated Local View grid point", query)
-        self.assertIn("nearest to where the mouse is currently located", query)
-        self.assertIn("cursor's precise visual position is the crosshair", query)
+        self.assertIn("cursor is precisely on this Local View point", query)
         self.assertIn("not an old grid point from history", query)
         self.assertIn("nearest Global View grid point near the current mouse position", query)
         self.assertIn("not necessarily on this Global View point", query)

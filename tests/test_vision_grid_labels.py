@@ -74,6 +74,25 @@ class VisionGridLabelTests(unittest.TestCase):
         self.assertEqual((local_mouse_x, local_mouse_y), (149, 51))
         self.assertEqual((left, top), (0, 0))
 
+    def test_local_grid_anchors_on_mouse_when_crop_is_truncated(self):
+        perceptor = tools.VisionPerceptor.__new__(tools.VisionPerceptor)
+
+        _, coordinate_map = perceptor._draw_grid_with_labels(
+            Image.new("RGB", (349, 251), color="white"),
+            step=20,
+            prefix="L",
+            offset_x=0,
+            offset_y=0,
+            anchor_x=149,
+            anchor_y=51,
+            anchor_col=10,
+            anchor_row=10,
+        )
+
+        self.assertEqual(coordinate_map["L-10-10"], (149, 51))
+        self.assertEqual(coordinate_map["L-03-08"], (9, 11))
+        self.assertEqual(coordinate_map["L-20-20"], (348, 250))
+
     def test_capture_state_restores_callback_when_screenshot_fails(self):
         events = []
         perceptor = tools.VisionPerceptor.__new__(tools.VisionPerceptor)
@@ -118,11 +137,9 @@ class VisionGridLabelTests(unittest.TestCase):
             _, local_image, coordinate_map, mouse_grid_id, nearest_global_grid_id = perceptor.capture_state(149, 51)
 
         self.assertEqual(local_image.size, (429, 331))
-        self.assertEqual(mouse_grid_id, "L-07-03")
+        self.assertEqual(mouse_grid_id, "L-10-10")
         self.assertEqual(nearest_global_grid_id, "G-01-01")
-        grid_x, grid_y = coordinate_map[mouse_grid_id]
-        self.assertLessEqual(abs(grid_x - 149), tools.LOCAL_GRID_STEP // 2)
-        self.assertLessEqual(abs(grid_y - 51), tools.LOCAL_GRID_STEP // 2)
+        self.assertEqual(coordinate_map[mouse_grid_id], (149, 51))
         self.assertEqual(events, ["pre", "post"])
 
     def _corner_center(self, image, center_x, center_y, half_size=10):
