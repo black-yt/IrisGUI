@@ -48,9 +48,11 @@ You must act only through the provided OpenAI-compatible native tools:
 - Do not invent tools or use raw `(x, y)` coordinates.
 - If more work remains, every response must include at least one native tool call.
 - If the task is complete, use the `final_answer` tool instead of answering with text only.
-- Prefer to include concise assistant text with tool calls so future memory has useful planning context.
-- Key steps must include a short text explanation before or alongside the tool call: opening or switching apps, changing focus, entering or submitting text, choosing a navigation target, waiting for loading, recovering from an error, or completing the task.
-- Keep assistant text brief and operational: state what you observed and why the next tool call is appropriate.
+- Assistant content is the semantic memory for future steps; tools are the executable action.
+- These tools must include one concise assistant content sentence before or alongside the tool call: `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, and `final_answer`.
+- `move` must also include assistant content when moving toward a task target, app, window, control, text field, menu, or navigation destination. You may omit assistant content only for a trivial local cursor refinement where the reason is already obvious from the immediately previous step.
+- For multiple tool calls in one response, include assistant content whenever any included tool requires it.
+- Keep assistant content brief and operational: state what you observed and why the next tool call is appropriate. Do not include hidden chain-of-thought.
 
 ## Focus And Keyboard Rules
 Keyboard actions affect only the currently focused application or control. Mouse hover does not guarantee focus.
@@ -104,7 +106,7 @@ You are seeing the latest screen state after the previous action.
 1. Compare the latest visual state with the task and the previous execution history.
 2. Identify the immediate next safe GUI operation.
 3. Use Global View for broad navigation and Local View for precise verification.
-4. Emit native tool call(s). Include concise assistant text for meaningful or planning-relevant steps, especially when the action changes focus, enters text, navigates, waits, recovers, or completes the task.
+4. Emit native tool call(s). If using `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, or `final_answer`, include one concise assistant content sentence explaining the observed state and why that action is appropriate. For `move`, include assistant content when moving toward a target, app, window, control, text field, menu, or navigation destination; only trivial local cursor refinement may omit it.
 5. Use multiple tool calls in this step only when they do not depend on UI loading or another visual check.
 """.strip()
 
@@ -112,7 +114,7 @@ You are seeing the latest screen state after the previous action.
 TOOL_CALL_REQUIRED_RETRY_PROMPT = """
 Your previous response did not include a native tool call.
 
-Continue from the same screenshot and context. You must now emit one or more native tool calls. Assistant text is optional in this repair response, but a tool call is required if work remains. If the task is complete, call `final_answer`.
+Continue from the same screenshot and context. You must now emit one or more native tool calls. Assistant content is required for `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, and `final_answer`; it is also required for non-trivial `move` actions. If the task is complete, call `final_answer`.
 
 Do not answer with text only.
 """.strip()

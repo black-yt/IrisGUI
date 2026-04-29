@@ -19,7 +19,7 @@ os.environ.setdefault("MEMORY_LONG_TOKEN_BUDGET", "128000")
 os.environ.setdefault("MEMORY_RECENT_INTERACTIONS_TO_KEEP", "3")
 os.environ.setdefault("MEMORY_CHARS_PER_TOKEN", "4")
 
-from scripts.agent import IRIS_SYSTEM_PROMPT, build_step_query
+from scripts.agent import IRIS_SYSTEM_PROMPT, TOOL_CALL_REQUIRED_RETRY_PROMPT, build_step_query
 from scripts.memory import HierarchicalMemory, build_memory_summary_user_prompt
 
 
@@ -31,7 +31,10 @@ class PromptTests(unittest.TestCase):
         self.assertIn("newest screenshot after the previous action", IRIS_SYSTEM_PROMPT)
         self.assertIn("Do not output JSON action blocks", IRIS_SYSTEM_PROMPT)
         self.assertIn("every response must include at least one native tool call", IRIS_SYSTEM_PROMPT)
-        self.assertIn("Key steps must include a short text explanation", IRIS_SYSTEM_PROMPT)
+        self.assertIn("Assistant content is the semantic memory for future steps", IRIS_SYSTEM_PROMPT)
+        self.assertIn("`click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, and `final_answer`", IRIS_SYSTEM_PROMPT)
+        self.assertIn("`move` must also include assistant content when moving toward a task target", IRIS_SYSTEM_PROMPT)
+        self.assertIn("trivial local cursor refinement", IRIS_SYSTEM_PROMPT)
         self.assertIn("Usually do not emit `move` followed immediately by `click`", IRIS_SYSTEM_PROMPT)
         self.assertIn("Keyboard actions affect only the currently focused application or control", IRIS_SYSTEM_PROMPT)
         self.assertIn("For browser shortcuts such as `ctrl+l`, make sure the browser window is focused first", IRIS_SYSTEM_PROMPT)
@@ -57,7 +60,14 @@ class PromptTests(unittest.TestCase):
         self.assertIn("not an old grid point from history", query)
         self.assertIn("nearest Global View grid point near the current mouse position", query)
         self.assertIn("not necessarily on this Global View point", query)
-        self.assertIn("Include concise assistant text", query)
+        self.assertIn("If using `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, or `final_answer`", query)
+        self.assertIn("For `move`, include assistant content when moving toward a target", query)
+
+    def test_repair_prompt_keeps_key_action_content_requirement(self):
+        self.assertIn("must now emit one or more native tool calls", TOOL_CALL_REQUIRED_RETRY_PROMPT)
+        self.assertIn("Assistant content is required for `click`, `double_click`", TOOL_CALL_REQUIRED_RETRY_PROMPT)
+        self.assertIn("it is also required for non-trivial `move` actions", TOOL_CALL_REQUIRED_RETRY_PROMPT)
+        self.assertIn("Do not answer with text only", TOOL_CALL_REQUIRED_RETRY_PROMPT)
 
     def test_memory_summary_user_prompt_includes_instructions_and_history(self):
         prompt = build_memory_summary_user_prompt(
