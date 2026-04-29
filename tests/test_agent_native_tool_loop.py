@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+from copy import deepcopy
 from contextlib import redirect_stdout
 from io import StringIO
 
@@ -36,7 +37,7 @@ class FakeMemory:
         return [{"role": "user", "content": "current state"}]
 
     def add_model_input_log(self, messages, step, images=None):
-        self.model_inputs.append({"messages": messages, "step": step, "images": images})
+        self.model_inputs.append({"messages": deepcopy(messages), "step": step, "images": images})
 
     def add_model_output_log(self, content, tool=None, step=0):
         self.model_outputs.append({"content": content, "tool": tool, "step": step})
@@ -103,7 +104,16 @@ def make_agent(fake_response):
     agent.memory = FakeMemory()
     agent.vision = FakeVision()
     agent.executor = FakeExecutor()
-    agent._call_llm_for_action = lambda messages: fake_response
+    agent.llm_messages = []
+    responses = list(fake_response) if isinstance(fake_response, list) else [fake_response]
+
+    def fake_call(messages):
+        agent.llm_messages.append(deepcopy(messages))
+        if len(responses) > 1:
+            return responses.pop(0)
+        return responses[0]
+
+    agent._call_llm_for_action = fake_call
     return agent
 
 
@@ -251,13 +261,66 @@ class AgentNativeToolLoopTests(unittest.TestCase):
             ],
         )
 
-    def test_step_rejects_plain_text_without_tool_call(self):
+    def test_step_repairs_plain_text_without_tool_call(self):
+        text_only_response = {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {
+                        "content": "The target is visible, so I should move there next.",
+                        "tool_calls": [],
+                    },
+                }
+            ]
+        }
+        tool_response = {
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "message": {
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call_move",
+                                "type": "function",
+                                "function": {
+                                    "name": "move",
+                                    "arguments": json.dumps({"point_id": "G-00-00"}),
+                                },
+                            }
+                        ],
+                    },
+                }
+            ]
+        }
+        agent = make_agent([text_only_response, tool_response])
+
+        with redirect_stdout(StringIO()):
+            feedback = agent.step()
+
+        self.assertEqual(feedback, "executed move")
+        self.assertEqual(len(agent.llm_messages), 2)
+        self.assertEqual(agent.executor.executed[0][0], {"action_type": "move", "point_id": "G-00-00"})
+        self.assertEqual(agent.memory.model_outputs[0]["content"], "The target is visible, so I should move there next.")
+        self.assertEqual(agent.memory.model_outputs[0]["tool"], [])
+        self.assertEqual(agent.memory.model_outputs[1]["content"], "")
+        self.assertEqual(agent.memory.model_outputs[1]["tool"], [{"name": "move", "arguments": {"point_id": "G-00-00"}}])
+        self.assertIn("The target is visible, so I should move there next.", agent.memory.steps[0]["content"])
+        self.assertIn("Tool call: move", agent.memory.steps[0]["content"])
+        repair_prompt = agent.llm_messages[1][-1]["content"]
+        self.assertEqual(len(agent.memory.model_inputs), 2)
+        self.assertEqual(agent.memory.model_inputs[1]["messages"][-1]["content"], repair_prompt)
+        self.assertIsNone(agent.memory.model_inputs[1]["images"])
+        self.assertIn("must now emit one or more native tool calls", repair_prompt)
+        self.assertIn("Do not answer with text only", repair_prompt)
+
+    def test_step_reports_error_after_repeated_text_only_responses(self):
         response = {
             "choices": [
                 {
                     "finish_reason": "stop",
                     "message": {
-                        "content": "I would click now.",
+                        "content": "I can describe the next click.",
                         "tool_calls": [],
                     },
                 }
@@ -269,6 +332,7 @@ class AgentNativeToolLoopTests(unittest.TestCase):
             feedback = agent.step()
 
         self.assertIn("no native tool call", feedback)
+        self.assertEqual(len(agent.llm_messages), 3)
         self.assertEqual(agent.executor.executed, [])
         self.assertIn("Execution Result", agent.memory.steps[1]["content"])
 

@@ -30,6 +30,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Nearby global grid", IRIS_SYSTEM_PROMPT)
         self.assertIn("newest screenshot after the previous action", IRIS_SYSTEM_PROMPT)
         self.assertIn("Do not output JSON action blocks", IRIS_SYSTEM_PROMPT)
+        self.assertIn("every response must include at least one native tool call", IRIS_SYSTEM_PROMPT)
+        self.assertIn("Key steps must include a short text explanation", IRIS_SYSTEM_PROMPT)
         self.assertIn("Usually do not emit `move` followed immediately by `click`", IRIS_SYSTEM_PROMPT)
         self.assertIn("Keyboard actions affect only the currently focused application or control", IRIS_SYSTEM_PROMPT)
         self.assertIn("For browser shortcuts such as `ctrl+l`, make sure the browser window is focused first", IRIS_SYSTEM_PROMPT)
@@ -55,6 +57,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("not an old grid point from history", query)
         self.assertIn("nearest Global View grid point near the current mouse position", query)
         self.assertIn("not necessarily on this Global View point", query)
+        self.assertIn("Include concise assistant text", query)
 
     def test_memory_summary_user_prompt_includes_instructions_and_history(self):
         prompt = build_memory_summary_user_prompt(

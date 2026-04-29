@@ -46,7 +46,11 @@ You must act only through the provided OpenAI-compatible native tools:
 - Do not output JSON action blocks in plain text.
 - Do not output XML/text tags such as `<action>`, `<tool_call>`, or `<answer>`.
 - Do not invent tools or use raw `(x, y)` coordinates.
-- You may include concise assistant text explaining the immediate reasoning, but every operation must be a native tool call.
+- If more work remains, every response must include at least one native tool call.
+- If the task is complete, use the `final_answer` tool instead of answering with text only.
+- Prefer to include concise assistant text with tool calls so future memory has useful planning context.
+- Key steps must include a short text explanation before or alongside the tool call: opening or switching apps, changing focus, entering or submitting text, choosing a navigation target, waiting for loading, recovering from an error, or completing the task.
+- Keep assistant text brief and operational: state what you observed and why the next tool call is appropriate.
 
 ## Focus And Keyboard Rules
 Keyboard actions affect only the currently focused application or control. Mouse hover does not guarantee focus.
@@ -100,8 +104,20 @@ You are seeing the latest screen state after the previous action.
 1. Compare the latest visual state with the task and the previous execution history.
 2. Identify the immediate next safe GUI operation.
 3. Use Global View for broad navigation and Local View for precise verification.
-4. Emit native tool call(s) only. Use multiple tool calls in this step only when they do not depend on UI loading or another visual check.
+4. Emit native tool call(s). Include concise assistant text for meaningful or planning-relevant steps, especially when the action changes focus, enters text, navigates, waits, recovers, or completes the task.
+5. Use multiple tool calls in this step only when they do not depend on UI loading or another visual check.
 """.strip()
+
+
+TOOL_CALL_REQUIRED_RETRY_PROMPT = """
+Your previous response did not include a native tool call.
+
+Continue from the same screenshot and context. You must now emit one or more native tool calls. Assistant text is optional in this repair response, but a tool call is required if work remains. If the task is complete, call `final_answer`.
+
+Do not answer with text only.
+""".strip()
+
+MAX_TOOL_CALL_REPAIR_ATTEMPTS = 2
 
 
 class IrisAgent:
@@ -198,22 +214,37 @@ class IrisAgent:
         error = None
         
         try:
-            chat_response = self._call_llm_for_action(messages)
-            choice = self._first_choice(chat_response)
-            assistant_message = self._choice_message(choice)
-            finish_reason = self._choice_finish_reason(choice)
-            assistant_content = self._message_content(assistant_message)
-            assistant_text = assistant_text_content(assistant_content).strip()
-            tool_calls = self._message_tool_calls(assistant_message)
-            model_output_tool_log = self._tool_calls_for_log(tool_calls)
+            assistant_text_parts = []
+            tool_calls = None
+            for repair_attempt in range(MAX_TOOL_CALL_REPAIR_ATTEMPTS + 1):
+                chat_response = self._call_llm_for_action(messages)
+                choice = self._first_choice(chat_response)
+                assistant_message = self._choice_message(choice)
+                finish_reason = self._choice_finish_reason(choice)
+                assistant_content = self._message_content(assistant_message)
+                assistant_text = assistant_text_content(assistant_content).strip()
+                tool_calls = self._message_tool_calls(assistant_message)
+                model_output_tool_log = self._tool_calls_for_log(tool_calls)
 
-            if assistant_text:
-                full_response = assistant_text
+                if assistant_text:
+                    assistant_text_parts.append(assistant_text)
+                    full_response = "\n\n".join(assistant_text_parts)
 
-            self.memory.add_model_output_log(full_response, tool=model_output_tool_log, step=self.step_count)
+                self.memory.add_model_output_log(assistant_text, tool=model_output_tool_log, step=self.step_count)
 
-            if finish_reason == "length":
-                raise ToolCallProtocolError("model response was truncated before a complete native tool call was available")
+                if finish_reason == "length":
+                    raise ToolCallProtocolError("model response was truncated before a complete native tool call was available")
+
+                if tool_calls:
+                    break
+
+                if repair_attempt >= MAX_TOOL_CALL_REPAIR_ATTEMPTS:
+                    raise ToolCallProtocolError("model returned no native tool call")
+
+                if assistant_text:
+                    messages.append({"role": "assistant", "content": assistant_text})
+                messages.append({"role": "user", "content": TOOL_CALL_REQUIRED_RETRY_PROMPT})
+                self.memory.add_model_input_log(messages, self.step_count)
 
             action_pairs = tool_calls_to_actions(tool_calls)
             feedback_parts = []
