@@ -107,6 +107,16 @@ class VisionGridLabelTests(unittest.TestCase):
         self.assertEqual(events, ["pre", "post"])
         self.assertIsNone(perceptor.last_capture_files)
 
+    def test_capture_state_explains_missing_screenshot_backend(self):
+        perceptor = tools.VisionPerceptor.__new__(tools.VisionPerceptor)
+        perceptor.pre_callback = None
+        perceptor.post_callback = None
+        perceptor.last_capture_files = None
+
+        with patch("scripts.tools.pyautogui.screenshot", side_effect=FileNotFoundError(2, "No such file or directory")):
+            with self.assertRaisesRegex(RuntimeError, "screenshot backend"):
+                perceptor.capture_state(0, 0)
+
     def test_capture_state_restores_callback_when_processing_fails(self):
         events = []
         perceptor = tools.VisionPerceptor.__new__(tools.VisionPerceptor)

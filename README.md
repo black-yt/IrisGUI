@@ -113,6 +113,8 @@ Make sure you have Python 3.10+ installed.
 pip install -r requirements.txt
 ```
 
+On Linux, Iris also needs a working desktop screenshot backend. Install `gnome-screenshot` for Wayland/X11 or `scrot` for X11 if screenshots fail.
+
 ### 3. Configure Environment
 Create a `.env` file in the root directory (copy from [`.env.example`](.env.example)) and add your LLM credentials:
 ```ini

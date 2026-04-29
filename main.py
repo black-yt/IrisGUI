@@ -2,10 +2,16 @@ import threading
 import time
 import os
 import sys
+import traceback
 from pynput import keyboard
 from scripts.agent import IrisAgent
 from scripts.terminal_input import prompt_for_task
 from scripts.utils import DISPLAY_BOX_WIDTH, DisplayWindow, colorize_terminal, format_status_box, print_boxed, logo
+
+
+def format_exception_details(error):
+    details = traceback.format_exception(type(error), error, error.__traceback__)
+    return f"{type(error).__name__}: {error}\n\nTraceback:\n{''.join(details).strip()}"
 
 
 class IrisController:
@@ -87,8 +93,9 @@ class IrisController:
                     break
                 
         except Exception as e:
-            error_message = format_status_box("Error", f"Error: {e}")
-            window_error_message = format_status_box("Error", f"Error: {e}", width=DISPLAY_BOX_WIDTH)
+            error_text = format_exception_details(e)
+            error_message = format_status_box("Error", error_text)
+            window_error_message = format_status_box("Error", error_text, width=DISPLAY_BOX_WIDTH)
             self.log(window_error_message + "\n")
             print(colorize_terminal(error_message), flush=True)
         finally:

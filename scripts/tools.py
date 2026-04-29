@@ -194,6 +194,20 @@ class VisionPerceptor:
         row = max(0, round(crop_half / LOCAL_GRID_STEP))
         return f"L-{col:02d}-{row:02d}", col, row
 
+    def _capture_screenshot(self):
+        try:
+            return pyautogui.screenshot()
+        except FileNotFoundError as e:
+            missing_path = f" Missing path: {e.filename}." if getattr(e, "filename", None) else ""
+            raise RuntimeError(
+                "Unable to capture screenshot. PyAutoGUI/Pillow could not find a required screenshot helper "
+                "or the helper did not create the expected screenshot file."
+                f"{missing_path} On Linux desktops, install a screenshot backend such as `gnome-screenshot` "
+                "for Wayland/X11 or `scrot` for X11, and run Iris from a real graphical desktop session."
+            ) from e
+        except Exception as e:
+            raise RuntimeError(f"Unable to capture screenshot: {e}") from e
+
     def capture_state(self, mouse_x, mouse_y):
         self.last_capture_files = None
         if self.pre_callback:
@@ -201,10 +215,7 @@ class VisionPerceptor:
 
         try:
             # Capture screenshot
-            try:
-                screenshot = pyautogui.screenshot()
-            except Exception as e:
-                raise RuntimeError(f"Unable to capture screenshot: {e}") from e
+            screenshot = self._capture_screenshot()
 
             # Ensure mouse coordinates are within screenshot bounds.
             # This handles multi-monitor setups where mouse might be outside the primary screen.
@@ -276,7 +287,8 @@ class ActionExecutor:
         # Initialize mouse position
         try:
             self.mouse_x, self.mouse_y = pyautogui.position()
-        except pyautogui.PyAutoGUIException:
+        except Exception as e:
+            print(f"Warning: Unable to read initial mouse position: {e}. Using (0, 0).")
             self.mouse_x, self.mouse_y = 0, 0
 
     def get_mouse_position(self):
@@ -303,8 +315,8 @@ class ActionExecutor:
                 if dist > TOLERANCE:
                     raise Exception(f"Critical Error: Mouse position mismatch! Tracked: ({self.mouse_x}, {self.mouse_y}), Real: ({real_x}, {real_y}). Failed to correct.")
                     
-        except pyautogui.PyAutoGUIException:
-            pass # Ignore if pyautogui fails to get position (e.g. headless)
+        except Exception as e:
+            print(f"Warning: Unable to read current mouse position: {e}. Using tracked position ({self.mouse_x}, {self.mouse_y}).")
             
         return self.mouse_x, self.mouse_y
 

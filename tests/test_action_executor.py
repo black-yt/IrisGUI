@@ -1,5 +1,7 @@
 import os
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from unittest.mock import call, patch
 
 os.environ.setdefault("LLM_API_ENDPOINT", "http://example.invalid/v1")
@@ -37,6 +39,26 @@ class ActionExecutorTests(unittest.TestCase):
         executor.mouse_x = 0
         executor.mouse_y = 0
         return executor, events
+
+    @patch("scripts.tools.pyautogui.position", side_effect=FileNotFoundError(2, "No such file or directory"))
+    def test_initial_mouse_position_failure_falls_back_to_origin(self, position):
+        with redirect_stdout(StringIO()) as output:
+            executor = tools.ActionExecutor()
+
+        self.assertEqual((executor.mouse_x, executor.mouse_y), (0, 0))
+        self.assertIn("Unable to read initial mouse position", output.getvalue())
+
+    @patch("scripts.tools.pyautogui.position", side_effect=FileNotFoundError(2, "No such file or directory"))
+    def test_current_mouse_position_failure_uses_tracked_position(self, position):
+        executor, _ = self.make_executor()
+        executor.mouse_x = 12
+        executor.mouse_y = 34
+
+        with redirect_stdout(StringIO()) as output:
+            position = executor.get_mouse_position()
+
+        self.assertEqual(position, (12, 34))
+        self.assertIn("Unable to read current mouse position", output.getvalue())
 
     @patch("scripts.tools.time.sleep")
     @patch("scripts.tools.pyautogui.moveTo")
