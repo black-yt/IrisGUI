@@ -175,6 +175,43 @@ Windows' per-monitor work area keeps taskbars on any edge clear; other platforms
 use the full monitor bounds. This setting only controls the floating log; it does
 not move or expand the agent's screenshot or input coordinate area to another monitor.
 
+### Screenshot History and Debug Archives
+
+```ini
+MEMORY_IMAGE_ROUNDS=-1
+MEMORY_IMAGE_TOKEN_MULTIPLIER=1.2
+DEBUG_MODE=False
+```
+
+`MEMORY_IMAGE_ROUNDS` includes the current observation: `-1` (default) keeps all
+uncompressed screenshot rounds, `4` sends up to eight images (current round plus
+three preceding rounds), and `1` sends only the current pair. Zero and values below
+`-1` are invalid. Each round's global/local pair stays in that round's original
+user message, before the corresponding assistant action and execution result.
+Older text remains when the image window expires. Historical local grids are for
+comparison; the next action must use the newest observation's grid.
+
+The 256000-token compression threshold now includes fixed prompts, summaries,
+history text, and both current and historical images. Image tokens are estimated
+from PNG dimensions using 32×32 patches times `MEMORY_IMAGE_TOKEN_MULTIPLIER`,
+rounded up per image. This is a conservative estimate without server-side image
+downscaling, based on the [OpenAI vision guide](https://developers.openai.com/api/docs/guides/images-vision).
+It is not exact billing for every model or compatible provider; adjust the
+multiplier if needed. Base64 characters are never counted as text tokens.
+Compression runs before sending the next action request and retains the configured
+recent interaction pairs. The summary model receives old screenshots alongside
+their original text/actions before those rounds are replaced by a text summary.
+If compression fails or returns an empty summary, the original history is restored.
+
+With `DEBUG_MODE=True`, every captured global/local pair is retained in
+`scripts/debug/screenshot/`, regardless of the upload window or later compression.
+`scripts/debug/log/*.jsonl` records step numbers, screenshot filenames, model replies
+(including repair attempts and memory summaries), tool calls, and execution results
+or errors. Model output entries also include the full SDK response, preserving
+tool IDs, finish reasons, usage, and any additional response fields returned by the
+provider. Archives stay local and are ignored by Git. Restart Iris after changing
+these settings.
+
 ### Precise Pointer Placement
 
 The `move` tool accepts continuous grid coordinates in both views. Either index can

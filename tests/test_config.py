@@ -1,10 +1,41 @@
 import os
+import json
+from pathlib import Path
+import subprocess
+import sys
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
 import scripts.config as config
+
+
+class ScreenshotHistoryConfigTests(unittest.TestCase):
+    def read_config(self, **settings):
+        environment = dict(os.environ, MEMORY_IMAGE_ROUNDS="", MEMORY_IMAGE_TOKEN_MULTIPLIER="")
+        environment.update(settings)
+        return subprocess.run([
+            sys.executable, "-c",
+            "import json; from scripts.config import MEMORY_IMAGE_ROUNDS, MEMORY_IMAGE_TOKEN_MULTIPLIER; "
+            "print(json.dumps([MEMORY_IMAGE_ROUNDS, MEMORY_IMAGE_TOKEN_MULTIPLIER]))",
+        ], cwd=Path(__file__).resolve().parents[1], env=environment, capture_output=True, text=True)
+
+    def test_defaults_and_positive_round_counts(self):
+        for value, expected in (("", -1), ("-1", -1), ("1", 1), ("4", 4)):
+            with self.subTest(value=value):
+                result = self.read_config(MEMORY_IMAGE_ROUNDS=value)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), [expected, 1.2])
+
+    def test_invalid_rounds_and_token_multipliers_fail_clearly(self):
+        for name, values in (("MEMORY_IMAGE_ROUNDS", ("0", "-2")),
+                             ("MEMORY_IMAGE_TOKEN_MULTIPLIER", ("0", "-1", "nan", "inf"))):
+            for value in values:
+                with self.subTest(name=name, value=value):
+                    result = self.read_config(**{name: value})
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(name, result.stderr)
 
 
 class LogWindowConfigTests(unittest.TestCase):

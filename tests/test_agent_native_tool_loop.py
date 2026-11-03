@@ -32,15 +32,18 @@ class FakeMemory:
         self.model_inputs = []
         self.model_outputs = []
 
-    def get_full_context(self, query, images=None):
+    def get_full_context(self, query, images=None, log_callback=None, step=None):
         self.context_requests.append((query, images))
         return [{"role": "user", "content": "current state"}]
 
     def add_model_input_log(self, messages, step, images=None):
         self.model_inputs.append({"messages": deepcopy(messages), "step": step, "images": images})
 
-    def add_model_output_log(self, content, tool=None, step=0):
+    def add_model_output_log(self, content, tool=None, step=0, response=None):
         self.model_outputs.append({"content": content, "tool": tool, "step": step})
+
+    def add_execution_log(self, feedback, tool_results, step):
+        pass
 
     def add_step(self, role, content, tool=None, log_content=None, log_extra=None, log_callback=None, compress=True):
         step = {"role": role, "content": content, "log_content": log_content, "log_extra": log_extra}

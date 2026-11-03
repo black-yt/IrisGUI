@@ -23,6 +23,9 @@ Complete the user's desktop task with the smallest reliable sequence of GUI oper
 
 ## Visual Inputs
 Each step includes two images. Both images have a white border with grid labels and a letter in each corner identifying the view.
+Retained screenshots stay in their original historical user messages, labeled by step.
+Compare those past observations with the newest observation to verify the effects of your actions.
+Use only the newest observation's grid and cursor position for your next action; historical local grids may be anchored elsewhere.
 
 - Global View (`G`): full-screen screenshot with a coarse grid. Grid IDs use `G-column-row`, for example `G-05-03`. The global border and label text are larger than the local view.
 - Local View (`L`): cropped screenshot near the current mouse cursor with a fine grid. It stops at screen edges, so it can be narrower or shorter than the configured crop size. The `L` grid is anchored at the current cursor and expands outward. Grid IDs use `L-column-row`, for example `L-10-10`.
@@ -219,8 +222,13 @@ class IrisAgent:
         capture_files = getattr(self.vision, "last_capture_files", None)
         
         # 2. Build Context
-        query = build_step_query(mouse_grid_id, nearest_global_grid_id)
-        messages = self.memory.get_full_context(query, images=(global_image, local_image))
+        query = f"## Observation for step {self.step_count}\n\n{build_step_query(mouse_grid_id, nearest_global_grid_id)}"
+        def memory_log(message):
+            emit(format_status_box("Memory", message), format_status_box("Memory", message, width=DISPLAY_BOX_WIDTH))
+
+        messages = self.memory.get_full_context(
+            query, images=(global_image, local_image), step=self.step_count, log_callback=memory_log,
+        )
         self.memory.add_model_input_log(messages, self.step_count, images=capture_files)
 
         # 3. Reasoning and native tool selection
@@ -236,19 +244,24 @@ class IrisAgent:
             tool_calls = None
             for repair_attempt in range(MAX_TOOL_CALL_REPAIR_ATTEMPTS + 1):
                 chat_response = self._call_llm_for_action(messages)
-                choice = self._first_choice(chat_response)
-                assistant_message = self._choice_message(choice)
-                finish_reason = self._choice_finish_reason(choice)
-                assistant_content = self._message_content(assistant_message)
-                assistant_text = assistant_text_content(assistant_content).strip()
-                tool_calls = self._message_tool_calls(assistant_message)
-                model_output_tool_log = self._tool_calls_for_log(tool_calls)
+                assistant_text = ""
+                model_output_tool_log = []
+                try:
+                    choice = self._first_choice(chat_response)
+                    assistant_message = self._choice_message(choice)
+                    finish_reason = self._choice_finish_reason(choice)
+                    assistant_content = self._message_content(assistant_message)
+                    assistant_text = assistant_text_content(assistant_content).strip()
+                    tool_calls = self._message_tool_calls(assistant_message)
+                    model_output_tool_log = self._tool_calls_for_log(tool_calls)
+                finally:
+                    self.memory.add_model_output_log(
+                        assistant_text, tool=model_output_tool_log, step=self.step_count, response=chat_response,
+                    )
 
                 if assistant_text:
                     assistant_text_parts.append(assistant_text)
                     full_response = "\n\n".join(assistant_text_parts)
-
-                self.memory.add_model_output_log(assistant_text, tool=model_output_tool_log, step=self.step_count)
 
                 if finish_reason == "length":
                     raise ToolCallProtocolError("model response was truncated before a complete native tool call was available")
@@ -283,11 +296,7 @@ class IrisAgent:
             error = feedback
         except Exception as e:
             error = f"Error during LLM inference: {e}"
-            emit(
-                format_agent_loop(self.step_count, mouse_grid_id, nearest_global_grid_id, full_response, tool_results, error=error),
-                format_agent_loop(self.step_count, mouse_grid_id, nearest_global_grid_id, full_response, tool_results, error=error, width=DISPLAY_BOX_WIDTH),
-            )
-            return f"Error: {e}"
+            feedback = f"Error: {e}"
 
         emit(
             format_agent_loop(self.step_count, mouse_grid_id, nearest_global_grid_id, full_response, tool_results, error=error),
@@ -295,9 +304,7 @@ class IrisAgent:
         )
 
         # 7. Memory
-        def memory_log(message):
-            emit(format_status_box("Memory", message), format_status_box("Memory", message, width=DISPLAY_BOX_WIDTH))
-
+        self.memory.add_execution_log(feedback, tool_results, self.step_count)
         memory_content = "\n".join(part for part in [full_response, *tool_memory_parts] if part).strip()
         assistant_log_extra = {"step": self.step_count}
         user_log_extra = {"step": self.step_count}
