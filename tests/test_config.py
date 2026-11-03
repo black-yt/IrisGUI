@@ -7,6 +7,19 @@ from unittest.mock import patch
 import scripts.config as config
 
 
+class LogWindowConfigTests(unittest.TestCase):
+    def test_default_and_normalized_modes(self):
+        for value, expected in (("", "normal"), ("   ", "normal"), ("normal", "normal"),
+                                (" HIDDEN ", "hidden"), ("secondary", "secondary")):
+            with self.subTest(value=value), patch.dict(os.environ, {"LOG_WINDOW_MODE": value}):
+                self.assertEqual(config._get_choice("LOG_WINDOW_MODE", "normal", ("normal", "hidden", "secondary")), expected)
+
+    def test_unknown_mode_is_reported(self):
+        with patch.dict(os.environ, {"LOG_WINDOW_MODE": "unknown"}):
+            with self.assertRaisesRegex(ValueError, "LOG_WINDOW_MODE must be one of"):
+                config._get_choice("LOG_WINDOW_MODE", "normal", ("normal", "hidden", "secondary"))
+
+
 class OpenAIClientConfigTests(unittest.TestCase):
     def setUp(self):
         self.old_endpoint = config.LLM_API_ENDPOINT

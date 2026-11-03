@@ -5,3 +5,4 @@ pynput
 python-dotenv
 pyperclip
 prompt_toolkit
+screeninfo

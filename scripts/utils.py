@@ -7,6 +7,8 @@ import re
 import shutil
 import sys
 import unicodedata
+from screeninfo import get_monitors
+from scripts.config import LOG_WINDOW_MODE
 
 logo = """
 ██╗██████╗ ██╗███████╗
@@ -266,6 +268,7 @@ class DisplayWindow:
         self.TEXT_BG = "#111827"
         self.FG_COLOR = "#dbeafe"
         self.FONT_STYLE = ("Consolas", 12)
+        self.mode = LOG_WINDOW_MODE
         
         # --- 2. Initialize Window ---
         self.root = tk.Tk()
@@ -284,10 +287,25 @@ class DisplayWindow:
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         box_pixel_width = text_font.measure("│ " + " " * self.box_width + " │")
-        win_width = min(screen_width - 60, max(620, box_pixel_width + 86))
-        win_height = int(screen_height * 0.9)
-        x = screen_width - win_width - 30
-        y = (screen_height - win_height) // 2
+        secondary = None
+        if self.mode == "secondary":
+            try:
+                secondary = self._secondary_monitor()
+            except Exception as error:
+                print(f"Warning: could not detect a secondary monitor: {error}")
+            if secondary is None:
+                print("Warning: no separate secondary monitor found; LOG_WINDOW_MODE falls back to normal.")
+                self.mode = "normal"
+            else:
+                screen_width, screen_height = secondary.width, secondary.height
+
+        self.hide_during_capture = self.mode == "normal"
+        win_width = max(1, min(screen_width - 60, max(620, box_pixel_width + 86)))
+        win_height = max(1, int(screen_height * 0.9))
+        x = secondary.x if secondary is not None else screen_width - win_width - 30
+        y = (secondary.y if secondary is not None else 0) + (screen_height - win_height) // 2
+        # The explicit '+' keeps negative monitor coordinates absolute in Tk;
+        # '-1920' alone would mean an offset measured from the right screen edge.
         self.root.geometry(f"{win_width}x{win_height}+{x}+{y}")
 
         # --- 3. UI Components ---
@@ -335,6 +353,20 @@ class DisplayWindow:
         
         # Start queue check
         self.root.after(100, self._check_queue)
+
+    @staticmethod
+    def _secondary_monitor():
+        monitors = [m for m in get_monitors() if m.width > 0 and m.height > 0]
+        if not monitors:
+            return None
+        primary = next((m for m in monitors if m.is_primary), None)
+        if primary is None:
+            primary = next((m for m in monitors if m.x <= 0 < m.x + m.width and m.y <= 0 < m.y + m.height), monitors[0])
+        # Mirrored/overlapping displays cannot keep the log off the captured screen.
+        return next((m for m in monitors if m is not primary and (
+            m.x + m.width <= primary.x or m.x >= primary.x + primary.width
+            or m.y + m.height <= primary.y or m.y >= primary.y + primary.height
+        )), None)
 
     def log(self, message):
         """Thread-safe logging method"""
@@ -400,9 +432,7 @@ class DisplayWindow:
             self.root.after_cancel(self.auto_hide_id)
             self.auto_hide_id = None
 
-        # Show window (only if not suppressed)
-        if not self.is_suppressed:
-            self.root.deiconify()
+        self.unhide_window()
         
         # Append text
         self.text_widget.config(state='normal')
@@ -428,8 +458,9 @@ class DisplayWindow:
         self.root.withdraw()
         
     def unhide_window(self):
-        """Show window"""
-        self.root.deiconify()
+        """Show only when the configured mode and capture state allow it."""
+        if self.mode != "hidden" and not self.is_suppressed and self.root.state() == "withdrawn":
+            self.root.deiconify()
 
     def safe_hide(self):
         """Thread-safe hide window"""
@@ -437,7 +468,8 @@ class DisplayWindow:
 
     def safe_unhide(self):
         """Thread-safe show window"""
-        self.root.after(0, self.unhide_window)
+        if self.mode != "hidden":
+            self.root.after(0, self.unhide_window)
         
     def safe_quit(self):
         """Thread-safe quit"""

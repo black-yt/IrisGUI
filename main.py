@@ -68,15 +68,15 @@ class IrisController:
         final_feedback = None
         try:
             def pre_callback():
-                # Hide window before screenshot
-                self.window.set_suppressed(True) # Prevent window from showing up if new logs arrive
-                self.window.safe_hide()
-                time.sleep(0.5) # Wait for window to hide
+                if self.window.hide_during_capture:
+                    self.window.set_suppressed(True) # Prevent new logs from revealing the window
+                    self.window.safe_hide()
+                    time.sleep(0.5) # Wait for window to hide
 
             def post_callback():
-                # Restore window after screenshot
-                self.window.set_suppressed(False) # Allow window to show again
-                self.window.safe_unhide()
+                if self.window.hide_during_capture:
+                    self.window.set_suppressed(False)
+                    self.window.safe_unhide()
 
             # Use DisplayWindow regardless of DEBUG_MODE
             # DEBUG_MODE only affects internal logic like saving screenshots (controlled by scripts.config)
@@ -105,7 +105,7 @@ class IrisController:
             if final_feedback:
                 print_boxed(f"Final Result:\n{final_feedback}")
             
-            # Ensure window is visible and prompt for exit
+            # Restore the log if its display mode permits it, then prompt for exit.
             self.window.safe_unhide()
             self.log(format_status_box("Exit", "Press ESC 3 times to exit the program.", width=DISPLAY_BOX_WIDTH) + "\n")
             print_boxed("Task finished. Press ESC 3 times to exit.")

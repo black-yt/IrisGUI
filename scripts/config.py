@@ -22,6 +22,13 @@ def _get_bool(name, default=False):
     return value.lower() == "true"
 
 
+def _get_choice(name, default, choices):
+    value = (os.getenv(name) or default).strip().lower() or default
+    if value not in choices:
+        raise ValueError(f"{name} must be one of: {', '.join(choices)}; got {value!r}")
+    return value
+
+
 # ===========================
 # Model Parameters
 # ===========================
@@ -47,6 +54,7 @@ MOUSE_WIDTH = _get_int("MOUSE_WIDTH", 4)                  # Mouse marker line wi
 # ===========================
 MAX_STEPS = _get_int("MAX_STEPS", 500)                    # Max steps per task to prevent infinite loops
 DEBUG_MODE = _get_bool("DEBUG_MODE", False)               # Whether to save screenshots locally
+LOG_WINDOW_MODE = _get_choice("LOG_WINDOW_MODE", "normal", ("normal", "hidden", "secondary"))
 ACTION_SETTLE_SECONDS = _get_float("ACTION_SETTLE_SECONDS", 0.2)
 TYPE_INTERVAL_SECONDS = _get_float("TYPE_INTERVAL_SECONDS", 0.01)
 CLIPBOARD_TEXT_THRESHOLD = _get_int("CLIPBOARD_TEXT_THRESHOLD", 30)

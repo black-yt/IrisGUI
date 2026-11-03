@@ -157,6 +157,23 @@ Each agent loop is shown as a color-coded structured box in both the terminal an
 When the floating log window has keyboard focus, a single **ESC** also exits Iris.
 This window-local shortcut is separate from the global triple-ESC emergency stop.
 
+### Log Window Display Mode
+
+Set `LOG_WINDOW_MODE` in `.env` and restart Iris:
+
+| Value | Behavior |
+| --- | --- |
+| `normal` (default) | Show the floating log on the primary screen; hide it during screenshots and GUI actions, then restore it. |
+| `hidden` | Keep the floating log hidden throughout the task, including errors and task completion. Terminal logs and global triple-ESC still work. |
+| `secondary` | Show the log flush against the left edge of the first non-primary monitor, vertically centered. It stays visible during primary-screen screenshots and actions. |
+
+For example, `LOG_WINDOW_MODE=secondary`. If no separate secondary screen is
+available, or monitor detection fails, this mode reports a warning and falls back
+to `normal`. Mirrored displays are treated as a single usable screen. Secondary
+monitors to the left of or above the primary screen are supported. This setting
+only controls the floating log; it does not move or expand the agent's screenshot
+or input coordinate area to another monitor.
+
 ### Precise Pointer Placement
 
 The `move` tool accepts continuous grid coordinates in both views. Either index can
