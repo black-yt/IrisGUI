@@ -45,7 +45,7 @@ MOUSE_WIDTH = _get_int("MOUSE_WIDTH", 4)                  # Mouse marker line wi
 # ===========================
 # Runtime Parameters
 # ===========================
-MAX_STEPS = _get_int("MAX_STEPS", 100)                    # Max steps per task to prevent infinite loops
+MAX_STEPS = _get_int("MAX_STEPS", 500)                    # Max steps per task to prevent infinite loops
 DEBUG_MODE = _get_bool("DEBUG_MODE", False)               # Whether to save screenshots locally
 ACTION_SETTLE_SECONDS = _get_float("ACTION_SETTLE_SECONDS", 0.2)
 TYPE_INTERVAL_SECONDS = _get_float("TYPE_INTERVAL_SECONDS", 0.01)
