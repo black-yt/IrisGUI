@@ -28,7 +28,7 @@ def _get_bool(name, default=False):
 LLM_API_ENDPOINT = os.getenv("LLM_API_ENDPOINT")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME") or "gpt-6.1-sol"
-LLM_TIMEOUT_SECONDS = _get_float("LLM_TIMEOUT_SECONDS", 0.0)  # 0 disables explicit timeout
+LLM_TIMEOUT_SECONDS = _get_float("LLM_TIMEOUT_SECONDS", 300.0)  # 0 uses the SDK's default timeout
 LLM_MAX_RETRIES = _get_int("LLM_MAX_RETRIES", 1)
 
 # ===========================
@@ -57,8 +57,8 @@ SCROLL_PAGE_CLICKS = _get_int("SCROLL_PAGE_CLICKS", 400)
 # ===========================
 # Memory Parameters
 # ===========================
-MEMORY_SHORT_TOKEN_BUDGET = _get_int("MEMORY_SHORT_TOKEN_BUDGET", 128000)
-MEMORY_LONG_TOKEN_BUDGET = _get_int("MEMORY_LONG_TOKEN_BUDGET", 128000)
+MEMORY_SHORT_TOKEN_BUDGET = _get_int("MEMORY_SHORT_TOKEN_BUDGET", 256000)
+MEMORY_LONG_TOKEN_BUDGET = _get_int("MEMORY_LONG_TOKEN_BUDGET", 256000)
 MEMORY_RECENT_INTERACTIONS_TO_KEEP = _get_int("MEMORY_RECENT_INTERACTIONS_TO_KEEP", 3)
 MEMORY_CHARS_PER_TOKEN = _get_float("MEMORY_CHARS_PER_TOKEN", 4.0)
 

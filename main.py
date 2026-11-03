@@ -4,6 +4,7 @@ import os
 import sys
 import traceback
 from pynput import keyboard
+from scripts.console import configure_console_encoding
 from scripts.agent import IrisAgent
 from scripts.terminal_input import prompt_for_task
 from scripts.utils import DISPLAY_BOX_WIDTH, DisplayWindow, colorize_terminal, format_status_box, print_boxed, logo
@@ -150,6 +151,8 @@ def wait_with_countdown(seconds):
     print_boxed("Time is up, starting task!")
 
 if __name__ == "__main__":
+    configure_console_encoding()
+
     # Check if running in a headless environment (if GUI is needed)
     if os.environ.get('DISPLAY', '') == '' and os.name != 'nt':
         print_boxed('No display found. Cannot run GUI.')

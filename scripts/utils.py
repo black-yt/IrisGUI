@@ -330,7 +330,7 @@ class DisplayWindow:
         # Message queue
         self.msg_queue = queue.Queue()
 
-        # Bind ESC key to quit application completely
+        # Window-local exit shortcut; the controller separately handles global triple-ESC.
         self.root.bind("<Escape>", self.quit_app)
         
         # Start queue check
