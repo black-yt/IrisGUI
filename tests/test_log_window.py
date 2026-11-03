@@ -64,12 +64,12 @@ class LogWindowModeTests(unittest.TestCase):
         window.unhide_window()
         self.assertEqual(root.deiconify.call_count, 2)
 
-    def test_secondary_is_flush_left_including_negative_monitor_coordinates(self):
+    def test_secondary_is_flush_left_and_full_height_including_negative_monitor_coordinates(self):
         cases = [
-            (monitor(2560, 0, 1920, 1080, False), "620x972+2560+54"),
-            (monitor(-1920, -240, 1920, 1080, False), "620x972+-1920+-186"),
-            (monitor(0, -1080, 1920, 1080, False), "620x972+0+-1026"),
-            (monitor(2560, 0, 500, 300, False), "440x270+2560+15"),
+            (monitor(2560, 0, 1920, 1080, False), "620x1080+2560+0"),
+            (monitor(-1920, -240, 1920, 1080, False), "620x1080+-1920+-240"),
+            (monitor(0, -1080, 1920, 1080, False), "620x1080+0+-1080"),
+            (monitor(2560, 0, 500, 300, False), "440x300+2560+0"),
         ]
         for secondary, expected in cases:
             with self.subTest(expected=expected):
@@ -104,7 +104,7 @@ class LogWindowModeTests(unittest.TestCase):
         primary = monitor(primary=None)
         window, root = self.make_window("secondary", [secondary, primary])
         self.assertEqual(window.mode, "secondary")
-        root.geometry.assert_called_once_with("620x972+-1920+54")
+        root.geometry.assert_called_once_with("620x1080+-1920+0")
 
 
 class ControllerLogModeTests(unittest.TestCase):

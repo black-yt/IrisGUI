@@ -165,7 +165,7 @@ Set `LOG_WINDOW_MODE` in `.env` and restart Iris:
 | --- | --- |
 | `normal` (default) | Show the floating log on the primary screen; hide it during screenshots and GUI actions, then restore it. |
 | `hidden` | Keep the floating log hidden throughout the task, including errors and task completion. Terminal logs and global triple-ESC still work. |
-| `secondary` | Show the log flush against the left edge of the first non-primary monitor, vertically centered. It stays visible during primary-screen screenshots and actions. |
+| `secondary` | Show the log flush against the left edge of the first non-primary monitor, spanning its full height from top to bottom. It stays visible during primary-screen screenshots and actions. |
 
 For example, `LOG_WINDOW_MODE=secondary`. If no separate secondary screen is
 available, or monitor detection fails, this mode reports a warning and falls back

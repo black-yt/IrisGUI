@@ -301,9 +301,9 @@ class DisplayWindow:
 
         self.hide_during_capture = self.mode == "normal"
         win_width = max(1, min(screen_width - 60, max(620, box_pixel_width + 86)))
-        win_height = max(1, int(screen_height * 0.9))
+        win_height = screen_height if secondary is not None else max(1, int(screen_height * 0.9))
         x = secondary.x if secondary is not None else screen_width - win_width - 30
-        y = (secondary.y if secondary is not None else 0) + (screen_height - win_height) // 2
+        y = secondary.y if secondary is not None else (screen_height - win_height) // 2
         # The explicit '+' keeps negative monitor coordinates absolute in Tk;
         # '-1920' alone would mean an offset measured from the right screen edge.
         self.root.geometry(f"{win_width}x{win_height}+{x}+{y}")
