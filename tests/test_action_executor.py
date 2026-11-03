@@ -29,6 +29,7 @@ os.environ.setdefault("MEMORY_RECENT_INTERACTIONS_TO_KEEP", "3")
 os.environ.setdefault("MEMORY_CHARS_PER_TOKEN", "4")
 
 import scripts.tools as tools
+from scripts.grid_coordinates import GridCoordinateMap, GridTransform
 
 
 class ActionExecutorTests(unittest.TestCase):
@@ -74,6 +75,35 @@ class ActionExecutorTests(unittest.TestCase):
         self.assertEqual((executor.mouse_x, executor.mouse_y), (799, 599))
         move_to.assert_called_once()
         sleep.assert_called_once_with(tools.ACTION_SETTLE_SECONDS)
+
+    @patch("scripts.tools.time.sleep")
+    @patch("scripts.tools.pyautogui.moveTo")
+    def test_continuous_move_reaches_pixel_between_lines_and_tracks_destination(self, move_to, sleep):
+        executor, events = self.make_executor()
+        points = GridCoordinateMap(transforms={"L": GridTransform(
+            step=20, width=400, height=400,
+            offset_x=300, offset_y=500,
+            anchor_x=200, anchor_y=200, anchor_col=10, anchor_row=10,
+        )})
+
+        result = executor.execute({"action_type": "move", "point_id": "L-10-10.32"}, points)
+
+        self.assertEqual(result, "Action move to L-10-10.32 executed.")
+        move_to.assert_called_once_with(500, 706, duration=0.5, tween=tools.pyautogui.easeInOutQuad)
+        self.assertEqual((executor.mouse_x, executor.mouse_y), (500, 706))
+        self.assertEqual(events, ["pre", "post"])
+
+    @patch("scripts.tools.time.sleep")
+    @patch("scripts.tools.pyautogui.moveTo")
+    def test_invalid_continuous_move_does_not_move_mouse(self, move_to, sleep):
+        points = GridCoordinateMap(transforms={"G": GridTransform(100, 500, 300)})
+        for point_id in ("G-05.01-00", "G-NaN-00", "L-10-10.32"):
+            with self.subTest(point_id=point_id):
+                executor, _ = self.make_executor()
+                result = executor.execute({"action_type": "move", "point_id": point_id}, points)
+                self.assertTrue(result.startswith("Error:"))
+                self.assertEqual((executor.mouse_x, executor.mouse_y), (0, 0))
+        move_to.assert_not_called()
 
     @patch("scripts.tools.time.sleep")
     def test_callbacks_run_for_early_error_return(self, sleep):

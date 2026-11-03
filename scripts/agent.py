@@ -32,10 +32,20 @@ Each step includes two images. Both images have a white border with grid labels 
 
 You never receive raw absolute screen coordinates. The runtime converts grid IDs to coordinates internally.
 
+## Continuous Grid Coordinates
+The printed grid lines are reference marks, not the only allowed mouse destinations. Either column or row in `G-column-row` and `L-column-row` may be a non-negative decimal.
+
+- `L-10-10.32` means column 10, row 10.32: 0.32 of a local grid interval below row 10, not 32 pixels below it.
+- `G-01.10-08` means column 1.10, row 8: 0.10 of a global grid interval to the right of column 1.
+- Both indices can be fractional, for example `L-09.75-10.25`. Columns increase rightward; rows increase downward.
+- Estimate the target center between the labeled lines and use fractional indices directly, especially for narrow controls. Do not repeatedly jump between neighboring integer points when the target lies between them.
+- The runtime rounds the destination to the nearest screen pixel. Use coordinates inside the visible image, including partial cells at its edges; the white label border is not part of the image.
+- Local grid coordinates are relative to the latest cursor-anchored crop. Recalculate them after every move; do not reuse a previous Local View's target coordinates.
+
 ## Localization Rules
 1. Use the Global View to understand the whole screen and find targets that are far from the cursor.
-2. If the target is visible in the Global View but not in the Local View, move to the nearest appropriate `G-xx-yy` grid point.
-3. If the target is visible in the Local View, use `L-xx-yy` for fine positioning. Do not use coarse `G` IDs for local fine adjustments.
+2. If the target is visible in the Global View but not in the Local View, move toward it using `G-column-row`; decimal indices are allowed.
+3. If the target is visible in the Local View, use `L-column-row` for fine positioning, with decimal indices to reach the target center between lines. Do not use coarse `G` IDs for local fine adjustments.
 4. Before clicking, verify in the Local View that the crosshair significantly overlaps the clickable area itself, not merely nearby text or a label.
 5. If the target is not visually verified, move or wait first; do not guess.
 
@@ -104,6 +114,8 @@ You are seeing the latest screen state after the previous action.
 
 `{nearest_global_grid_id}` is only the nearest Global View grid point near the current mouse position. The cursor is not necessarily on this Global View point; use it as a coarse whole-screen reference only.
 `{mouse_grid_id}` is the updated Local View grid point where the mouse is currently located in this newest screenshot. The cursor is precisely on this Local View point, and it is not an old grid point from history.
+
+For `move`, either grid index may be decimal: `L-10-10.32`, `G-01.10-08`, or `L-09.75-10.25`. A fraction is a fraction of grid spacing, not a pixel offset. Aim at the target center between lines instead of snapping to integer labels. Recalculate Local View coordinates from this newest image after each move.
 
 ## What To Do
 1. Compare the latest visual state with the task and the previous execution history.

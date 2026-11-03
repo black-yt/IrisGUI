@@ -5,6 +5,7 @@ from datetime import datetime
 from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
 from scripts.config import *
+from scripts.grid_coordinates import GridCoordinateMap, GridTransform
 from scripts.terminal_input import prompt_for_user_input
 from scripts.utils import DISPLAY_BOX_WIDTH, colorize_terminal, format_status_box
 import pyautogui
@@ -106,7 +107,17 @@ class VisionPerceptor:
         
         font = _load_label_font(font_size)
 
-        coordinate_map = {}
+        coordinate_map = GridCoordinateMap(transforms={prefix: GridTransform(
+            step=step,
+            width=width,
+            height=height,
+            offset_x=offset_x,
+            offset_y=offset_y,
+            anchor_x=anchor_x,
+            anchor_y=anchor_y,
+            anchor_col=anchor_col,
+            anchor_row=anchor_row,
+        )})
         self._draw_corner_prefix_labels(draw, prefix, padding, new_width, new_height, font)
 
         columns = self._grid_axis_positions(anchor_x, width, step, anchor_col)
@@ -254,7 +265,7 @@ class VisionPerceptor:
             )
 
             # Merge maps
-            full_coordinate_map = {**global_map, **local_map}
+            full_coordinate_map = global_map.merged(local_map)
 
             nearest_global_grid_id = self._nearest_grid_id(
                 mouse_x,
@@ -346,14 +357,21 @@ class ActionExecutor:
                 if not point_id:
                     return "Error: 'point_id' is required for move action."
                 
-                if coordinate_map and point_id in coordinate_map:
-                    x, y = coordinate_map[point_id]
-                    pyautogui.moveTo(x, y, duration=duration, tween=pyautogui.easeInOutQuad)
-                    # Update internal mouse position
-                    self.mouse_x, self.mouse_y = x, y
-                    return f"Action move to {point_id} executed."
-                else:
+                if coordinate_map is None:
                     return f"Error: Point ID '{point_id}' not found in coordinate map."
+                try:
+                    if isinstance(coordinate_map, GridCoordinateMap):
+                        x, y = coordinate_map.resolve(point_id)
+                    else:
+                        x, y = coordinate_map[point_id]
+                except KeyError:
+                    return f"Error: Point ID '{point_id}' not found in coordinate map."
+                except ValueError as error:
+                    return f"Error: Invalid point ID '{point_id}': {error}"
+                pyautogui.moveTo(x, y, duration=duration, tween=pyautogui.easeInOutQuad)
+                # Track the actual destination pixel, including decimal moves.
+                self.mouse_x, self.mouse_y = x, y
+                return f"Action move to {point_id} executed."
 
             elif action_type == "click":
                 button = action_dict.get("button", "left")

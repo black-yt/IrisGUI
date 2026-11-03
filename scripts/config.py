@@ -27,7 +27,7 @@ def _get_bool(name, default=False):
 # ===========================
 LLM_API_ENDPOINT = os.getenv("LLM_API_ENDPOINT")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
-LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME")
+LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME") or "gpt-6.1-sol"
 LLM_TIMEOUT_SECONDS = _get_float("LLM_TIMEOUT_SECONDS", 0.0)  # 0 disables explicit timeout
 LLM_MAX_RETRIES = _get_int("LLM_MAX_RETRIES", 1)
 

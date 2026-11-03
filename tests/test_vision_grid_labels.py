@@ -150,7 +150,20 @@ class VisionGridLabelTests(unittest.TestCase):
         self.assertEqual(mouse_grid_id, "L-10-10")
         self.assertEqual(nearest_global_grid_id, "G-01-01")
         self.assertEqual(coordinate_map[mouse_grid_id], (149, 51))
+        self.assertEqual(coordinate_map.resolve("G-01.10-02.32"), (110, 232))
+        self.assertEqual(coordinate_map.resolve("L-10-10.32"), (149, 57))
         self.assertEqual(events, ["pre", "post"])
+
+    def test_capture_state_refreshes_continuous_local_anchor_after_movement(self):
+        perceptor = tools.VisionPerceptor.__new__(tools.VisionPerceptor)
+        perceptor.pre_callback = None
+        perceptor.post_callback = None
+        with patch("scripts.tools.pyautogui.screenshot", return_value=Image.new("RGB", (500, 300))):
+            old_map = perceptor.capture_state(149, 51)[2]
+            new_map = perceptor.capture_state(154, 57)[2]
+
+        self.assertEqual(old_map.resolve("L-10.25-10.25"), (154, 56))
+        self.assertEqual(new_map.resolve("L-10.25-10.25"), (159, 62))
 
     def _corner_center(self, image, center_x, center_y, half_size=10):
         return image.crop(

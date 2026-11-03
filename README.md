@@ -130,7 +130,7 @@ Create a `.env` file in the root directory (copy from [`.env.example`](.env.exam
 ```ini
 LLM_API_ENDPOINT="https://base-url/v1"
 LLM_API_KEY="sk-your-api-key-here"
-LLM_MODEL_NAME="gemini-3.1-pro-preview"
+LLM_MODEL_NAME="gpt-6.1-sol"
 LLM_TIMEOUT_SECONDS=0
 LLM_MAX_RETRIES=1
 MEMORY_SHORT_TOKEN_BUDGET=128000
@@ -149,6 +149,20 @@ Iris uses native tool calling for GUI actions. It can execute multiple tool call
 Each agent loop is shown as a color-coded structured box in both the terminal and the floating screen log, with separate sections for perception, model reasoning, tool calls, and feedback.
 
 > **💡 Tip:** To stop Iris in an emergency, press **ESC** three times quickly! 🛑
+
+### Precise Pointer Placement
+
+The `move` tool accepts continuous grid coordinates in both views. Either index can
+be a decimal, and the original integer IDs still work:
+
+* `L-10-10.32`: column 10, row 10.32 (0.32 local grid intervals below row 10).
+* `G-01.10-08`: column 1.10, row 8 (0.10 global grid intervals right of column 1).
+* `L-09.75-10.25`: both indices are fractional.
+
+Fractions refer to grid spacing, not pixel offsets. Coordinates are resolved using
+the latest view's actual anchor, crop and spacing, then rounded to the nearest
+screen pixel. Positions outside that view are rejected. Local coordinates must
+be recalculated after each move because the Local View follows the cursor.
 
 ---
 

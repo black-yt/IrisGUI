@@ -27,15 +27,22 @@ GUI_ACTION_TOOLS = [
         name="move",
         action_type="move",
         description=(
-            "Move the mouse cursor to a visible grid point. Use G-xx-yy for broad movement in the Global View "
-            "and L-xx-yy for precise movement in the Local View. Do not provide raw screen coordinates."
+            "Move the mouse cursor to a position in the latest visible grid. Use G-column-row for the Global View "
+            "and L-column-row for the Local View. Either index may be decimal: L-10-10.32 or G-01.10-08. "
+            "Fractions interpolate grid spacing; they are not pixel offsets. Use fractional Local View indices "
+            "to reach small targets between lines. Do not provide raw screen coordinates."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "point_id": {
                     "type": "string",
-                    "description": "Visible grid point ID such as G-05-03 or L-02-04.",
+                    "description": (
+                        "Position in the latest view: G-column-row or L-column-row. Both indices accept "
+                        "non-negative integers or decimals, e.g. G-05-03, L-10-10.32, "
+                        "G-01.10-08, or L-09.75-10.25. Column increases rightward; row increases downward. "
+                        "Choose a position inside the image. The destination is rounded to the nearest pixel."
+                    ),
                 },
                 "duration": {
                     "type": "number",
