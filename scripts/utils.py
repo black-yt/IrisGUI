@@ -291,19 +291,20 @@ class DisplayWindow:
         if self.mode == "secondary":
             try:
                 secondary = self._secondary_monitor()
+                if secondary is not None:
+                    work_x, work_y, screen_width, screen_height = self._monitor_work_area(secondary)
             except Exception as error:
-                print(f"Warning: could not detect a secondary monitor: {error}")
+                secondary = None
+                print(f"Warning: could not configure a secondary monitor: {error}")
             if secondary is None:
-                print("Warning: no separate secondary monitor found; LOG_WINDOW_MODE falls back to normal.")
+                print("Warning: secondary monitor unavailable; LOG_WINDOW_MODE falls back to normal.")
                 self.mode = "normal"
-            else:
-                screen_width, screen_height = secondary.width, secondary.height
 
         self.hide_during_capture = self.mode == "normal"
         win_width = max(1, min(screen_width - 60, max(620, box_pixel_width + 86)))
         win_height = screen_height if secondary is not None else max(1, int(screen_height * 0.9))
-        x = secondary.x if secondary is not None else screen_width - win_width - 30
-        y = secondary.y if secondary is not None else (screen_height - win_height) // 2
+        x = work_x if secondary is not None else screen_width - win_width - 30
+        y = work_y if secondary is not None else (screen_height - win_height) // 2
         # The explicit '+' keeps negative monitor coordinates absolute in Tk;
         # '-1920' alone would mean an offset measured from the right screen edge.
         self.root.geometry(f"{win_width}x{win_height}+{x}+{y}")
@@ -353,6 +354,42 @@ class DisplayWindow:
         
         # Start queue check
         self.root.after(100, self._check_queue)
+
+    @staticmethod
+    def _monitor_work_area(monitor):
+        """Return usable monitor bounds, excluding Windows taskbars and app bars."""
+        if os.name != "nt":
+            return monitor.x, monitor.y, monitor.width, monitor.height
+
+        import ctypes
+        from ctypes import wintypes
+
+        class MonitorInfo(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("rcMonitor", wintypes.RECT),
+                ("rcWork", wintypes.RECT),
+                ("dwFlags", wintypes.DWORD),
+            ]
+
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        user32.MonitorFromRect.argtypes = [ctypes.POINTER(wintypes.RECT), wintypes.DWORD]
+        user32.MonitorFromRect.restype = wintypes.HANDLE
+        user32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(MonitorInfo)]
+        user32.GetMonitorInfoW.restype = wintypes.BOOL
+        bounds = wintypes.RECT(monitor.x, monitor.y, monitor.x + monitor.width, monitor.y + monitor.height)
+        handle = user32.MonitorFromRect(ctypes.byref(bounds), 0)  # MONITOR_DEFAULTTONULL
+        if not handle:
+            raise OSError("Could not locate the secondary monitor's work area")
+        info = MonitorInfo()
+        info.cbSize = ctypes.sizeof(info)
+        if not user32.GetMonitorInfoW(handle, ctypes.byref(info)):
+            raise OSError("GetMonitorInfoW failed to read the secondary monitor's work area")
+        work = info.rcWork
+        if not (bounds.left <= work.left < work.right <= bounds.right
+                and bounds.top <= work.top < work.bottom <= bounds.bottom):
+            raise ValueError("Windows returned an invalid monitor work area")
+        return work.left, work.top, work.right - work.left, work.bottom - work.top
 
     @staticmethod
     def _secondary_monitor():

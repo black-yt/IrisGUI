@@ -13,7 +13,7 @@ def monitor(x=0, y=0, width=2560, height=1440, primary=True):
 
 
 class LogWindowModeTests(unittest.TestCase):
-    def make_window(self, mode, monitors=None, detection_error=None):
+    def make_window(self, mode, monitors=None, detection_error=None, work_area=None, work_area_error=None):
         root = Mock()
         root.winfo_screenwidth.return_value = 2560
         root.winfo_screenheight.return_value = 1440
@@ -25,6 +25,11 @@ class LogWindowModeTests(unittest.TestCase):
         with ExitStack() as stack:
             stack.enter_context(patch("scripts.utils.LOG_WINDOW_MODE", mode))
             stack.enter_context(patch("scripts.utils.get_monitors", return_value=monitors or [], side_effect=detection_error))
+            def usable_bounds(display):
+                if work_area_error is not None:
+                    raise work_area_error
+                return work_area if work_area is not None else (display.x, display.y, display.width, display.height)
+            stack.enter_context(patch.object(DisplayWindow, "_monitor_work_area", side_effect=usable_bounds))
             stack.enter_context(patch("scripts.utils.tk.Tk", return_value=root))
             stack.enter_context(patch("scripts.utils.tkfont.Font", return_value=font))
             for name in ("tk.Frame", "tk.Label", "tk.Text", "ttk.Scrollbar"):
@@ -85,6 +90,27 @@ class LogWindowModeTests(unittest.TestCase):
         window.show("Next log")
         window.unhide_window()
         root.deiconify.assert_called_once()
+
+    def test_secondary_fits_work_area_with_taskbar_on_any_edge(self):
+        secondary = monitor(-1920, -240, 1920, 1080, False)
+        cases = [
+            ((-1920, -240, 1920, 1032), "620x1032+-1920+-240"),  # bottom
+            ((-1920, -192, 1920, 1032), "620x1032+-1920+-192"),  # top
+            ((-1872, -240, 1872, 1080), "620x1080+-1872+-240"),  # left
+            ((-1920, -240, 580, 1080), "520x1080+-1920+-240"),  # right
+        ]
+        for work_area, expected in cases:
+            with self.subTest(work_area=work_area):
+                window, root = self.make_window("secondary", [monitor(), secondary], work_area=work_area)
+                self.assertEqual(window.mode, "secondary")
+                root.geometry.assert_called_once_with(expected)
+
+    def test_work_area_failure_falls_back_without_covering_taskbar(self):
+        window, root = self.make_window("secondary", [monitor(), monitor(2560, primary=False)],
+                                        work_area_error=OSError("work area unavailable"))
+        self.assertEqual(window.mode, "normal")
+        self.assertTrue(window.hide_during_capture)
+        root.geometry.assert_called_once_with("620x1296+1910+72")
 
     def test_secondary_falls_back_when_missing_or_mirrored(self):
         for monitors in ([], [monitor()], [monitor(), monitor(primary=False)]):

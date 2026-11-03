@@ -165,14 +165,15 @@ Set `LOG_WINDOW_MODE` in `.env` and restart Iris:
 | --- | --- |
 | `normal` (default) | Show the floating log on the primary screen; hide it during screenshots and GUI actions, then restore it. |
 | `hidden` | Keep the floating log hidden throughout the task, including errors and task completion. Terminal logs and global triple-ESC still work. |
-| `secondary` | Show the log flush against the left edge of the first non-primary monitor, spanning its full height from top to bottom. It stays visible during primary-screen screenshots and actions. |
+| `secondary` | Show the log flush against the left edge of the first non-primary monitor's usable work area, spanning from its top to just above the Windows taskbar. It stays visible during primary-screen screenshots and actions. |
 
 For example, `LOG_WINDOW_MODE=secondary`. If no separate secondary screen is
-available, or monitor detection fails, this mode reports a warning and falls back
-to `normal`. Mirrored displays are treated as a single usable screen. Secondary
-monitors to the left of or above the primary screen are supported. This setting
-only controls the floating log; it does not move or expand the agent's screenshot
-or input coordinate area to another monitor.
+available, or monitor/work-area detection fails, this mode reports a warning and
+falls back to `normal`. Mirrored displays are treated as a single usable screen.
+Secondary monitors to the left of or above the primary screen are supported.
+Windows' per-monitor work area keeps taskbars on any edge clear; other platforms
+use the full monitor bounds. This setting only controls the floating log; it does
+not move or expand the agent's screenshot or input coordinate area to another monitor.
 
 ### Precise Pointer Placement
 
