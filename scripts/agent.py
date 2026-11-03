@@ -1,4 +1,5 @@
 from openai import OpenAI
+from copy import deepcopy
 from scripts.config import *
 from scripts.memory import HierarchicalMemory
 from scripts.native_tools import (
@@ -6,7 +7,6 @@ from scripts.native_tools import (
     ToolCallProtocolError,
     assistant_text_content,
     compact_tool_call_for_log,
-    format_tool_call_for_memory,
     normalize_tool_call,
     tool_calls_to_actions,
 )
@@ -23,6 +23,7 @@ Complete the user's desktop task with the smallest reliable sequence of GUI oper
 
 ## Visual Inputs
 Each step includes two images. Both images have a white border with grid labels and a letter in each corner identifying the view.
+The first attached image is the Global View; the second is the Local View.
 Retained screenshots stay in their original historical user messages, labeled by step.
 Compare those past observations with the newest observation to verify the effects of your actions.
 Use only the newest observation's grid and cursor position for your next action; historical local grids may be anchored elsewhere.
@@ -62,6 +63,7 @@ You must act only through the provided OpenAI-compatible native tools:
 - If more work remains, every response must include at least one native tool call.
 - If the task is complete, use the `final_answer` tool instead of answering with text only.
 - Assistant content is the semantic memory for future steps; tools are the executable action.
+- Your complete assistant messages and native tool calls/results remain in the conversation. Continue from that history; do not restate it each turn.
 - These tools must include one concise assistant content sentence before or alongside the tool call: `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, `ask_input`, and `final_answer`.
 - `move` must also include assistant content when moving toward a task target, app, window, control, text field, menu, or navigation destination. You may omit assistant content only for a trivial local cursor refinement where the reason is already obvious from the immediately previous step.
 - For multiple tool calls in one response, include assistant content whenever any included tool requires it.
@@ -105,28 +107,10 @@ When the task is fully complete, call `final_answer` with a concise completion s
 
 def build_step_query(mouse_grid_id, nearest_global_grid_id):
     return f"""
-## Current Step
+Nearby global mouse grid: `{nearest_global_grid_id}`.
+Current local mouse grid: `{mouse_grid_id}`.
 
-You are seeing the latest screen state after the previous action.
-
-## Inputs Attached To This Message
-1. Global View image: full screen, coarse `G-xx-yy` grid, `G` marks in the four border corners.
-2. Local View image: cursor-anchored crop clipped at screen edges, fine `L-xx-yy` grid, `L` marks in the four border corners.
-3. Nearby global mouse grid: `{nearest_global_grid_id}`.
-4. Current local mouse grid: `{mouse_grid_id}`.
-
-`{nearest_global_grid_id}` is only the nearest Global View grid point near the current mouse position. The cursor is not necessarily on this Global View point; use it as a coarse whole-screen reference only.
-`{mouse_grid_id}` is the updated Local View grid point where the mouse is currently located in this newest screenshot. The cursor is precisely on this Local View point, and it is not an old grid point from history.
-
-For `move`, either grid index may be decimal: `L-10-10.32`, `G-01.10-08`, or `L-09.75-10.25`. A fraction is a fraction of grid spacing, not a pixel offset. Aim at the target center between lines instead of snapping to integer labels. Recalculate Local View coordinates from this newest image after each move.
-
-## What To Do
-1. Compare the latest visual state with the task and the previous execution history.
-2. Identify the immediate next safe GUI operation.
-3. Use Global View for broad navigation and Local View for precise verification.
-4. Emit native tool call(s). If using `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, `ask_input`, or `final_answer`, include one concise assistant content sentence explaining the observed state and why that action is appropriate. For `move`, include assistant content when moving toward a target, app, window, control, text field, menu, or navigation destination; only trivial local cursor refinement may omit it.
-5. Use multiple tool calls in this step only when they do not depend on UI loading or another visual check.
-6. If user information, a user choice, or confirmation is required, call `ask_input` alone and wait for the next step before acting on the answer.
+Assess the current screen and the previous action's result. Decide the next step and call the appropriate tool(s).
 """.strip()
 
 
@@ -183,6 +167,18 @@ class IrisAgent:
         return message.get("tool_calls") if isinstance(message, dict) else getattr(message, "tool_calls", None)
 
     @staticmethod
+    def _assistant_request_message(message):
+        if isinstance(message, dict):
+            result = deepcopy(message)
+        else:
+            result = message.model_dump(mode="json", exclude_unset=True)
+        result.setdefault("role", "assistant")
+        ids = [call.get("id") for call in result.get("tool_calls") or []]
+        if any(not isinstance(call_id, str) or not call_id for call_id in ids) or len(set(ids)) != len(ids):
+            raise ToolCallProtocolError("native tool calls must have non-empty, unique IDs")
+        return result
+
+    @staticmethod
     def _tool_calls_for_log(tool_calls):
         log_entries = []
         for tool_call in tool_calls or []:
@@ -235,9 +231,8 @@ class IrisAgent:
         full_response = ""
         feedback = ""
         tool_results = []
-        tool_log = []
-        tool_memory_parts = []
         error = None
+        pending_tool_ids = []
         
         try:
             assistant_text_parts = []
@@ -263,6 +258,12 @@ class IrisAgent:
                     assistant_text_parts.append(assistant_text)
                     full_response = "\n\n".join(assistant_text_parts)
 
+                # Keep the provider's message, including original content, native
+                # arguments, IDs and reasoning/signature fields, as the next turn.
+                reply = self._assistant_request_message(assistant_message)
+                messages.append(reply)
+                pending_tool_ids = [call["id"] for call in reply.get("tool_calls") or []]
+
                 if finish_reason == "length":
                     raise ToolCallProtocolError("model response was truncated before a complete native tool call was available")
 
@@ -272,19 +273,17 @@ class IrisAgent:
                 if repair_attempt >= MAX_TOOL_CALL_REPAIR_ATTEMPTS:
                     raise ToolCallProtocolError("model returned no native tool call")
 
-                if assistant_text:
-                    messages.append({"role": "assistant", "content": assistant_text})
                 messages.append({"role": "user", "content": TOOL_CALL_REQUIRED_RETRY_PROMPT})
                 self.memory.add_model_input_log(messages, self.step_count)
 
             action_pairs = tool_calls_to_actions(tool_calls)
             feedback_parts = []
             for action_dict, normalized_tool_call in action_pairs:
-                tool_log.append(compact_tool_call_for_log(normalized_tool_call))
-                tool_memory_parts.append(format_tool_call_for_memory(normalized_tool_call))
-
                 # 4. Execution
                 action_feedback = self.executor.execute(action_dict, coordinate_map, log_callback=log_callback)
+                call_id = normalized_tool_call["id"]
+                messages.append({"role": "tool", "tool_call_id": call_id, "content": action_feedback})
+                pending_tool_ids.remove(call_id)
                 feedback_parts.append(action_feedback)
                 tool_results.append({"action": action_dict, "feedback": action_feedback})
                 if "[Task Completed]" in action_feedback:
@@ -298,6 +297,14 @@ class IrisAgent:
             error = f"Error during LLM inference: {e}"
             feedback = f"Error: {e}"
 
+        # Close every announced call, including calls skipped after an error or
+        # completion. The next request must never contain an unanswered tool call.
+        for call_id in pending_tool_ids:
+            messages.append({"role": "tool", "tool_call_id": call_id,
+                             "content": feedback if error else "Not executed: task already completed."})
+        if error and not pending_tool_ids:
+            messages.append({"role": "user", "content": f"Execution Result: {feedback}"})
+
         emit(
             format_agent_loop(self.step_count, mouse_grid_id, nearest_global_grid_id, full_response, tool_results, error=error),
             format_agent_loop(self.step_count, mouse_grid_id, nearest_global_grid_id, full_response, tool_results, error=error, width=DISPLAY_BOX_WIDTH),
@@ -305,21 +312,7 @@ class IrisAgent:
 
         # 7. Memory
         self.memory.add_execution_log(feedback, tool_results, self.step_count)
-        memory_content = "\n".join(part for part in [full_response, *tool_memory_parts] if part).strip()
-        assistant_log_extra = {"step": self.step_count}
-        user_log_extra = {"step": self.step_count}
-        if capture_files:
-            user_log_extra["images"] = capture_files
-        self.memory.add_interaction(
-            memory_content,
-            f"Execution Result: {feedback}",
-            tool=tool_log,
-            assistant_log_content=full_response,
-            assistant_log_extra=assistant_log_extra,
-            user_log_extra=user_log_extra,
-            log_callback=memory_log,
-            debug_log=False,
-        )
+        self.memory.commit_round(log_callback=memory_log)
         
         return feedback
 

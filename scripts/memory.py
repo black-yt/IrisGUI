@@ -7,6 +7,8 @@ import math
 import os
 import struct
 from datetime import datetime
+from copy import deepcopy
+from scripts.native_tools import GUI_TOOL_SCHEMAS
 
 
 MEMORY_MANAGER_SYSTEM_PROMPT_TEMPLATE = """
@@ -77,6 +79,9 @@ def build_memory_summary_user_prompt(instructions, memory_list):
     for index, step in enumerate(memory_list, start=1):
         role = step.get("role", "unknown")
         content = HierarchicalMemory.content_text(step.get("content", ""))
+        fields = {key: value for key, value in step.items() if key not in {"role", "content"} and not key.startswith("_")}
+        if fields:
+            content += "\nNative message fields: " + json.dumps(fields, ensure_ascii=False)
         history_lines.append(f"### Entry {index} ({role})\n{content}")
 
     history = "\n\n".join(history_lines) if history_lines else "(No history provided.)"
@@ -100,6 +105,9 @@ class HierarchicalMemory:
         self.short_memory_layer = []
         self._fixed_input_logged = False
         self._pending_observation = None
+        self._pending_request_messages = None
+        self._pending_round_start = 0
+        self._round_sequence = 0
         self._current_step = 0
         
         self.client = OpenAI(**openai_client_kwargs())
@@ -225,6 +233,19 @@ class HierarchicalMemory:
         if compress:
             self.compress_context(log_callback)
 
+    def commit_round(self, log_callback=None):
+        """Append this round's exact request/reply/tool transcript as one group."""
+        if self._pending_request_messages is None:
+            raise RuntimeError("Cannot commit a round without its original request messages")
+        self._round_sequence += 1
+        for message in self._pending_request_messages[self._pending_round_start:]:
+            stored = deepcopy(message)
+            stored["_round_id"] = self._round_sequence
+            self.short_memory_layer.append(stored)
+        self._pending_observation = None
+        self._pending_request_messages = None
+        self.compress_context(log_callback)
+
     def add_interaction(
         self,
         assistant_content,
@@ -236,6 +257,8 @@ class HierarchicalMemory:
         log_callback=None,
         debug_log=True,
     ):
+        self._round_sequence += 1
+        round_start = len(self.short_memory_layer)
         self.add_step(
             "assistant",
             assistant_content,
@@ -250,7 +273,14 @@ class HierarchicalMemory:
         # its original user message when building requests, never onto later results.
         if self._pending_observation is not None:
             self.short_memory_layer[-1]["_observation"] = self._pending_observation
+            if self._pending_request_messages is not None:
+                # Preserve repair assistant/user messages exactly as sent. Dropping
+                # them would change the next request's previously submitted prefix.
+                self.short_memory_layer[-1]["_request_continuation"] = (
+                    self._pending_request_messages[self._pending_round_start + 1:]
+                )
             self._pending_observation = None
+            self._pending_request_messages = None
         self.add_step(
             "user",
             user_content,
@@ -259,6 +289,8 @@ class HierarchicalMemory:
             compress=False,
             debug_log=debug_log,
         )
+        for message in self.short_memory_layer[round_start:]:
+            message["_round_id"] = self._round_sequence
         self.compress_context(log_callback)
 
     def estimate_tokens_for_text(self, text):
@@ -279,6 +311,8 @@ class HierarchicalMemory:
     def estimate_tokens_for_steps(self, steps):
         return sum(
             self.estimate_tokens_for_text(step.get("role", "")) + self.estimate_tokens_for_content(step.get("content", ""))
+            + self.estimate_tokens_for_text(json.dumps({key: value for key, value in step.items()
+                if key not in {"role", "content"}}, ensure_ascii=False))
             for step in self._messages_for_steps(steps)
         )
 
@@ -311,7 +345,8 @@ class HierarchicalMemory:
         for step in steps:
             if step.get("_observation") is not None:
                 messages.append(step["_observation"])
-            messages.append({"role": step["role"], "content": step["content"]})
+            messages.extend(step.get("_request_continuation", []))
+            messages.append({key: value for key, value in step.items() if not key.startswith("_")})
         return messages
 
     @staticmethod
@@ -322,7 +357,12 @@ class HierarchicalMemory:
     def _prune_observation_images(self):
         if MEMORY_IMAGE_ROUNDS == -1:
             return
-        observations = [step["_observation"] for step in self.short_memory_layer if step.get("_observation") is not None]
+        observations = []
+        for step in self.short_memory_layer:
+            if step.get("_observation") is not None:
+                observations.append(step["_observation"])
+            if self._has_images(step):
+                observations.append(step)
         if self._pending_observation is not None:
             observations.append(self._pending_observation)
         image_rounds = [message for message in observations if self._has_images(message)]
@@ -344,10 +384,14 @@ class HierarchicalMemory:
             user_prompt = build_memory_summary_user_prompt(instructions, history)
             messages_for_summary.append({"role": "user", "content": user_prompt})
         
+        tool_options = {}
+        if any(message.get("tool_calls") for message in messages_for_summary):
+            tool_options = {"tools": GUI_TOOL_SCHEMAS, "tool_choice": "none"}
         response = self.client.chat.completions.create(
             model=LLM_MODEL_NAME,
             messages=messages_for_summary,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            **tool_options,
         )
         summary = None
         try:
@@ -377,15 +421,21 @@ class HierarchicalMemory:
 
         log(f"⏳ Compressing short memory ({short_tokens} estimated tokens)...")
 
-        keep_messages = max(0, MEMORY_RECENT_INTERACTIONS_TO_KEEP * 2)
-        if keep_messages and len(self.short_memory_layer) > keep_messages:
-            steps_to_compress = self.short_memory_layer[:-keep_messages]
-            self.short_memory_layer = self.short_memory_layer[-keep_messages:]
-        elif keep_messages:
+        # Retain whole rounds so an assistant tool call is never separated from
+        # its results, even when a round has retries or multiple tool calls.
+        starts = []
+        previous = object()
+        for index, message in enumerate(self.short_memory_layer):
+            round_id = message.get("_round_id", ("legacy", index // 2))
+            if round_id != previous:
+                starts.append(index)
+                previous = round_id
+        keep_rounds = max(0, MEMORY_RECENT_INTERACTIONS_TO_KEEP)
+        if keep_rounds and len(starts) <= keep_rounds:
             return
-        else:
-            steps_to_compress = self.short_memory_layer
-            self.short_memory_layer = []
+        cutoff = starts[-keep_rounds] if keep_rounds else len(self.short_memory_layer)
+        steps_to_compress = self.short_memory_layer[:cutoff]
+        self.short_memory_layer = self.short_memory_layer[cutoff:]
         
         try:
             summary = self.compress_memory(
@@ -465,8 +515,11 @@ class HierarchicalMemory:
         self._prune_observation_images()
         self.compress_context(log_callback)
         # Expose only valid API message fields; internal observation metadata stays local.
-        return (self.fixed_layer + self.long_memory_layer
-                + self._messages_for_steps(self.short_memory_layer) + [self._pending_observation])
+        messages = (self.fixed_layer + self.long_memory_layer
+                    + self._messages_for_steps(self.short_memory_layer) + [self._pending_observation])
+        self._pending_round_start = len(messages) - 1
+        self._pending_request_messages = messages
+        return messages
 
 if __name__ == "__main__":
     # python -m scripts.memory

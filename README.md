@@ -177,6 +177,22 @@ not move or expand the agent's screenshot or input coordinate area to another mo
 
 ### Screenshot History and Debug Archives
 
+Per-step prompts contain only the current mouse-grid state and a short request to
+assess the screen and choose the next action. Shared image, coordinate and tool
+rules stay in the fixed system prompt. Historical observation text and tool-repair
+messages are retained verbatim; each new round appends to the previous request
+prefix. Image-window pruning and memory compression still update history according
+to their settings. With all images retained and no compression, the complete
+previous request's message prefix stays unchanged, including during repair retries.
+Native tools are also passed through the API's `tools` parameter on every action
+request, with stable schemas and ordering. Each model response is appended as its
+original assistant message, retaining content, `tool_calls`, arguments, IDs, and
+provider-specific reasoning/signature fields. Every executed or skipped call gets
+a matching `role: tool` result with its `tool_call_id`; history is not rebuilt as
+plain-text tool summaries. Compression retains complete rounds so tool calls and
+their results cannot be split. Token estimation also counts native call arguments
+and other message fields.
+
 ```ini
 MEMORY_IMAGE_ROUNDS=-1
 MEMORY_IMAGE_TOKEN_MULTIPLIER=1.2
@@ -199,7 +215,7 @@ downscaling, based on the [OpenAI vision guide](https://developers.openai.com/ap
 It is not exact billing for every model or compatible provider; adjust the
 multiplier if needed. Base64 characters are never counted as text tokens.
 Compression runs before sending the next action request and retains the configured
-recent interaction pairs. The summary model receives old screenshots alongside
+recent complete rounds. The summary model receives old screenshots alongside
 their original text/actions before those rounds are replaced by a text summary.
 If compression fails or returns an empty summary, the original history is restored.
 

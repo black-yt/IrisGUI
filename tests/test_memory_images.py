@@ -46,6 +46,17 @@ def tool_response(text="I will wait for the display to settle.", finish_reason="
 
 
 class ScreenshotMemoryTests(unittest.TestCase):
+    def assert_tool_protocol(self, messages):
+        pending = []
+        for message in messages:
+            if message["role"] == "tool":
+                self.assertIn(message["tool_call_id"], pending)
+                pending.remove(message["tool_call_id"])
+            else:
+                self.assertEqual(pending, [], "Tool calls must be answered before another user/assistant message")
+                pending = [call["id"] for call in message.get("tool_calls") or []]
+        self.assertEqual(pending, [])
+
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
@@ -172,6 +183,7 @@ class ScreenshotMemoryTests(unittest.TestCase):
 
         def handle(request):
             requests.append(json.loads(request.content))
+            self.assert_tool_protocol(requests[-1]["messages"])
             response = tool_response()
             response.update(id="test", object="chat.completion", created=0, model="test-model")
             response["choices"][0]["index"] = 0
@@ -196,7 +208,107 @@ class ScreenshotMemoryTests(unittest.TestCase):
         self.assertEqual(len(observations), 5)
         self.assertEqual([len(image_parts(message)) for message in observations], [0, 2, 2, 2, 2])
         self.assertIn("Observation for step 5", observations[-1]["content"][0]["text"])
-        self.assertTrue(all(set(message) == {"role", "content"} for message in last_messages))
+        self.assertTrue(all(not any(key.startswith("_") for key in message) for message in last_messages))
+        self.assertEqual([message["tool_call_id"] for message in last_messages if message["role"] == "tool"],
+                         ["call_wait"] * 4)
+
+    def test_sdk_requests_append_to_exact_prefix_including_repairs_and_legacy_text(self):
+        legacy_text = "Old detailed observation:\n  原样保留\nGrid instructions from an earlier round.  "
+        legacy_request = deepcopy(self.memory.get_full_context(legacy_text, screenshot_pair()))
+        self.memory.add_interaction("Original action text.  ", "Original result\n", debug_log=False)
+        requests = []
+
+        def handle(request):
+            requests.append(json.loads(request.content))
+            self.assert_tool_protocol(requests[-1]["messages"])
+            if len(requests) <= 2:
+                response = {"choices": [{"finish_reason": "stop", "message": {
+                    "role": "assistant", "content": f"Repair attempt {len(requests)}: 状态已确认。", "tool_calls": [],
+                }}]}
+            else:
+                response = tool_response(text="  Original assistant reply.\n")
+                response["choices"][0]["message"]["reasoning_content"] = "Original reasoning metadata.\n"
+                response["choices"][0]["message"]["tool_calls"][0]["extra_content"] = {
+                    "google": {"thought_signature": "original-signature"},
+                }
+                response["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"] = '{ "seconds" : 0.1 }'
+            response.update(id="test", object="chat.completion", created=0, model="test-model")
+            response["choices"][0]["index"] = 0
+            return httpx.Response(200, json=response)
+
+        with OpenAI(api_key="test-only", base_url="http://mock.invalid/v1", max_retries=0,
+                    http_client=httpx.Client(transport=httpx.MockTransport(handle))) as client:
+            agent = IrisAgent.__new__(IrisAgent)
+            agent.memory = self.memory
+            agent.client = client
+            agent.step_count = 0
+            agent.vision = SimpleNamespace(capture_state=lambda *_: (*screenshot_pair(), {}, "L-10-10", "G-01-01"))
+            agent.executor = SimpleNamespace(get_mouse_position=lambda: (0, 0), execute=lambda *args, **kwargs: "wait executed")
+            with redirect_stdout(StringIO()):
+                for _ in range(3):
+                    self.assertEqual(agent.step(), "wait executed")
+        self.assertEqual(len(requests), 5)
+        self.assertEqual(requests[0]["messages"][:len(legacy_request)], legacy_request)
+        for before, after in zip(requests, requests[1:]):
+            self.assertEqual(after["messages"][:len(before["messages"])], before["messages"])
+            self.assertEqual(after["tools"], before["tools"])
+            self.assertEqual(after["tool_choice"], "auto")
+            self.assertIs(after["parallel_tool_calls"], True)
+        self.assertEqual(requests[-1]["messages"][2]["content"][0]["text"], legacy_text)
+        reply = next(message for message in requests[-1]["messages"] if message.get("tool_calls"))
+        self.assertEqual(reply["content"], "  Original assistant reply.\n")
+        self.assertEqual(reply["reasoning_content"], "Original reasoning metadata.\n")
+        self.assertEqual(reply["tool_calls"][0]["function"]["arguments"], '{ "seconds" : 0.1 }')
+        self.assertEqual(reply["tool_calls"][0]["extra_content"]["google"]["thought_signature"], "original-signature")
+        self.assertEqual({tool["function"]["name"] for tool in requests[-1]["tools"]},
+                         {"move", "click", "double_click", "mouse_down", "mouse_up", "scroll", "type",
+                          "hotkey", "wait", "ask_input", "final_answer"})
+
+    def test_native_call_arguments_count_toward_token_budget(self):
+        text_only = [{"role": "assistant", "content": "next"}]
+        native = deepcopy(text_only)
+        native[0]["tool_calls"] = [{"id": "long_call", "type": "function", "function": {
+            "name": "type", "arguments": json.dumps({"text": "x" * 8000}),
+        }}]
+        self.assertGreaterEqual(self.memory.estimate_tokens_for_steps(native)
+                                - self.memory.estimate_tokens_for_steps(text_only), 2000)
+
+    def test_native_compression_preserves_whole_rounds_and_restores_them_on_failure(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail):
+                self.memory = HierarchicalMemory("system", "task")
+                self.client.chat.completions.create.side_effect = TimeoutError("summary failed") if fail else None
+                self.client.chat.completions.create.reset_mock()
+                for number in (1, 2):
+                    messages = self.memory.get_full_context(f"round {number}", screenshot_pair(number))
+                    if number == 2:
+                        messages.extend([{"role": "assistant", "content": "Retry text."},
+                                         {"role": "user", "content": "Use a tool."}])
+                    calls = [{"id": f"call_{number}_{i}", "type": "function", "function": {
+                        "name": "wait", "arguments": '{"seconds": 0.1}',
+                    }} for i in (1, 2)]
+                    messages.append({"role": "assistant", "content": "Wait.", "tool_calls": calls})
+                    messages.extend({"role": "tool", "tool_call_id": call["id"], "content": "wait executed"} for call in calls)
+                    self.memory.commit_round()
+                original = deepcopy(self.memory._messages_for_steps(self.memory.short_memory_layer))
+                with patch("scripts.memory.MEMORY_SHORT_TOKEN_BUDGET", 100), \
+                        patch("scripts.memory.MEMORY_RECENT_INTERACTIONS_TO_KEEP", 1):
+                    context = self.memory.get_full_context("round 3", screenshot_pair(3), log_callback=lambda _: None)
+                self.client.chat.completions.create.assert_called_once()
+                request = self.client.chat.completions.create.call_args.kwargs
+                self.assertEqual(request["tool_choice"], "none")
+                self.assertEqual([m["tool_call_id"] for m in request["messages"] if m["role"] == "tool"],
+                                 ["call_1_1", "call_1_2"])
+                self.assert_tool_protocol(request["messages"])
+                self.assert_tool_protocol(context)
+                if fail:
+                    self.assertEqual(context[2:-1], original)
+                else:
+                    retained = self.memory._messages_for_steps(self.memory.short_memory_layer)
+                    self.assertEqual(retained, original[4:])
+                    self.assertEqual(retained[0]["content"][0]["text"], "round 2")
+                    self.assertEqual([m["tool_call_id"] for m in retained if m["role"] == "tool"],
+                                     ["call_2_1", "call_2_2"])
 
 
 class DebugScreenshotIntegrationTests(unittest.TestCase):

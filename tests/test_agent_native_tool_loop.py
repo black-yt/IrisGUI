@@ -4,6 +4,7 @@ import unittest
 from copy import deepcopy
 from contextlib import redirect_stdout
 from io import StringIO
+from unittest.mock import Mock
 
 os.environ.setdefault("LLM_API_ENDPOINT", "http://example.invalid/v1")
 os.environ.setdefault("LLM_API_KEY", "sk-test")
@@ -34,7 +35,11 @@ class FakeMemory:
 
     def get_full_context(self, query, images=None, log_callback=None, step=None):
         self.context_requests.append((query, images))
-        return [{"role": "user", "content": "current state"}]
+        self.pending_messages = [{"role": "user", "content": "current state"}]
+        return self.pending_messages
+
+    def commit_round(self, log_callback=None):
+        self.steps.extend(deepcopy(self.pending_messages))
 
     def add_model_input_log(self, messages, step, images=None):
         self.model_inputs.append({"messages": deepcopy(messages), "step": step, "images": images})
@@ -44,27 +49,6 @@ class FakeMemory:
 
     def add_execution_log(self, feedback, tool_results, step):
         pass
-
-    def add_step(self, role, content, tool=None, log_content=None, log_extra=None, log_callback=None, compress=True):
-        step = {"role": role, "content": content, "log_content": log_content, "log_extra": log_extra}
-        if tool:
-            step["tool"] = tool
-        self.steps.append(step)
-
-    def add_interaction(
-        self,
-        assistant_content,
-        user_content,
-        tool=None,
-        assistant_log_content=None,
-        assistant_log_extra=None,
-        user_log_extra=None,
-        log_callback=None,
-        debug_log=True,
-    ):
-        self.add_step("assistant", assistant_content, tool=tool, log_content=assistant_log_content, log_extra=assistant_log_extra)
-        self.add_step("user", user_content, log_extra=user_log_extra)
-
 
 class FakeVision:
     def __init__(self):
@@ -159,19 +143,10 @@ class AgentNativeToolLoopTests(unittest.TestCase):
         self.assertEqual(agent.memory.model_inputs[0]["images"], {"global": "global_step.png", "local": "local_step.png"})
         self.assertEqual(agent.memory.model_outputs[0]["content"], "I will move to the requested grid point.")
         self.assertEqual(agent.memory.model_outputs[0]["tool"], [{"name": "move", "arguments": {"point_id": "G-00-00"}}])
-        assistant_memory = agent.memory.steps[0]
-        self.assertIn("I will move to the requested grid point.", assistant_memory["content"])
-        self.assertIn("Tool call: move", assistant_memory["content"])
-        self.assertEqual(assistant_memory["log_content"], "I will move to the requested grid point.")
-        self.assertEqual(
-            assistant_memory["tool"],
-            [{"name": "move", "arguments": {"point_id": "G-00-00"}}],
-        )
-        self.assertEqual(assistant_memory["log_extra"], {"step": 1})
-        self.assertEqual(
-            agent.memory.steps[1]["log_extra"],
-            {"step": 1, "images": {"global": "global_step.png", "local": "local_step.png"}},
-        )
+        assistant_memory = agent.memory.steps[1]
+        self.assertEqual(assistant_memory["content"], "I will move to the requested grid point.")
+        self.assertEqual(assistant_memory["tool_calls"], response["choices"][0]["message"]["tool_calls"])
+        self.assertEqual(agent.memory.steps[2], {"role": "tool", "tool_call_id": "call_move", "content": "executed move"})
 
     def test_step_emits_only_final_loop_box(self):
         response = {
@@ -253,18 +228,11 @@ class AgentNativeToolLoopTests(unittest.TestCase):
         )
         self.assertIn("executed click", feedback)
         self.assertIn("executed type", feedback)
-        assistant_memory = agent.memory.steps[0]
+        assistant_memory = agent.memory.steps[1]
         self.assertIn("The input is already verified, so I will click and type.", assistant_memory["content"])
-        self.assertIn("Tool call: click", assistant_memory["content"])
-        self.assertIn("Tool call: type", assistant_memory["content"])
-        self.assertEqual(assistant_memory["log_content"], "The input is already verified, so I will click and type.")
-        self.assertEqual(
-            assistant_memory["tool"],
-            [
-                {"name": "click", "arguments": {"button": "left"}},
-                {"name": "type", "arguments": {"text": "hello", "submit": True}},
-            ],
-        )
+        self.assertEqual(assistant_memory["tool_calls"], response["choices"][0]["message"]["tool_calls"])
+        self.assertEqual([(step["tool_call_id"], step["content"]) for step in agent.memory.steps if step["role"] == "tool"],
+                         [("call_click", "executed click"), ("call_type", "executed type")])
 
     def test_step_repairs_plain_text_without_tool_call(self):
         text_only_response = {
@@ -310,8 +278,8 @@ class AgentNativeToolLoopTests(unittest.TestCase):
         self.assertEqual(agent.memory.model_outputs[0]["tool"], [])
         self.assertEqual(agent.memory.model_outputs[1]["content"], "")
         self.assertEqual(agent.memory.model_outputs[1]["tool"], [{"name": "move", "arguments": {"point_id": "G-00-00"}}])
-        self.assertIn("The target is visible, so I should move there next.", agent.memory.steps[0]["content"])
-        self.assertIn("Tool call: move", agent.memory.steps[0]["content"])
+        self.assertEqual(agent.memory.steps[1]["content"], "The target is visible, so I should move there next.")
+        self.assertEqual(agent.memory.steps[3]["tool_calls"], tool_response["choices"][0]["message"]["tool_calls"])
         repair_prompt = agent.llm_messages[1][-1]["content"]
         self.assertEqual(len(agent.memory.model_inputs), 2)
         self.assertEqual(agent.memory.model_inputs[1]["messages"][-1]["content"], repair_prompt)
@@ -339,7 +307,7 @@ class AgentNativeToolLoopTests(unittest.TestCase):
         self.assertIn("no native tool call", feedback)
         self.assertEqual(len(agent.llm_messages), 3)
         self.assertEqual(agent.executor.executed, [])
-        self.assertIn("Execution Result", agent.memory.steps[1]["content"])
+        self.assertIn("Execution Result", agent.memory.steps[-1]["content"])
 
     def test_llm_request_messages_are_passed_without_character_rewrites(self):
         agent = IrisAgent.__new__(IrisAgent)
@@ -349,6 +317,27 @@ class AgentNativeToolLoopTests(unittest.TestCase):
 
         sent_messages = agent.client.completions.kwargs["messages"]
         self.assertEqual(sent_messages, [{"role": "user", "content": "bad \ud83d"}])
+
+    def test_unexecuted_calls_get_matching_results_after_completion_or_error(self):
+        calls = [{"id": f"call_{index}", "type": "function", "function": {
+            "name": "wait", "arguments": '{"seconds": 0.1}',
+        }} for index in range(3)]
+        response = {"choices": [{"finish_reason": "tool_calls", "message": {
+            "content": "Waiting.", "tool_calls": calls,
+        }}]}
+        for results, expected_calls, error_text in (
+            (["[Task Completed]: done"], 1, "task already completed"),
+            (["first succeeded", RuntimeError("execution failed")], 2, "execution failed"),
+        ):
+            with self.subTest(results=results):
+                agent = make_agent(response)
+                agent.executor.execute = Mock(side_effect=results)
+                with redirect_stdout(StringIO()):
+                    agent.step()
+                replies = [message for message in agent.memory.steps if message["role"] == "tool"]
+                self.assertEqual([message["tool_call_id"] for message in replies], ["call_0", "call_1", "call_2"])
+                self.assertIn(error_text, replies[-1]["content"])
+                self.assertEqual(agent.executor.execute.call_count, expected_calls)
 
 
 if __name__ == "__main__":

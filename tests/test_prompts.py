@@ -44,27 +44,20 @@ class PromptTests(unittest.TestCase):
     def test_step_query_marks_mouse_grid_as_latest_local_id(self):
         query = build_step_query("L-10-10", "G-08-06")
 
-        self.assertIn("Global View image", query)
-        self.assertIn("Local View image", query)
-        self.assertIn("cursor-anchored crop clipped at screen edges", query)
         self.assertIn("Nearby global mouse grid: `G-08-06`", query)
         self.assertIn("Current local mouse grid: `L-10-10`", query)
         self.assertLess(
             query.index("Nearby global mouse grid: `G-08-06`"),
             query.index("Current local mouse grid: `L-10-10`"),
         )
-        self.assertLess(
-            query.index("not necessarily on this Global View point"),
-            query.index("cursor is precisely on this Local View point"),
-        )
-        self.assertIn("updated Local View grid point", query)
-        self.assertIn("cursor is precisely on this Local View point", query)
-        self.assertIn("not an old grid point from history", query)
-        self.assertIn("nearest Global View grid point near the current mouse position", query)
-        self.assertIn("not necessarily on this Global View point", query)
-        self.assertIn("If using `click`, `double_click`, `mouse_down`, `mouse_up`, `scroll`, `type`, `hotkey`, `wait`, `ask_input`, or `final_answer`", query)
-        self.assertIn("For `move`, include assistant content when moving toward a target", query)
-        self.assertIn("call `ask_input` alone", query)
+        self.assertIn("Assess the current screen and the previous action's result", query)
+        self.assertIn("Decide the next step", query)
+        self.assertLess(len(query.split()), 50)
+        # Common image, coordinate and tool rules belong only in the fixed prompt.
+        self.assertNotIn("Inputs Attached", query)
+        self.assertNotIn("L-10-10.32", query)
+        self.assertNotIn("ask_input", query)
+        self.assertIn("The first attached image is the Global View", IRIS_SYSTEM_PROMPT)
 
     def test_repair_prompt_keeps_key_action_content_requirement(self):
         self.assertIn("must now emit one or more native tool calls", TOOL_CALL_REQUIRED_RETRY_PROMPT)
