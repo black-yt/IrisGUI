@@ -254,6 +254,7 @@ class ScreenshotMemoryTests(unittest.TestCase):
             self.assertEqual(after["tools"], before["tools"])
             self.assertEqual(after["tool_choice"], "auto")
             self.assertIs(after["parallel_tool_calls"], True)
+            self.assertEqual(after["reasoning_effort"], before["reasoning_effort"])
         self.assertEqual(requests[-1]["messages"][2]["content"][0]["text"], legacy_text)
         reply = next(message for message in requests[-1]["messages"] if message.get("tool_calls"))
         self.assertEqual(reply["content"], "  Original assistant reply.\n")
@@ -272,6 +273,37 @@ class ScreenshotMemoryTests(unittest.TestCase):
         }}]
         self.assertGreaterEqual(self.memory.estimate_tokens_for_steps(native)
                                 - self.memory.estimate_tokens_for_steps(text_only), 2000)
+
+    def test_reasoning_effort_is_sent_to_actions_and_compression_or_omitted(self):
+        for effort in ("low", "high", "none", "omit"):
+            with self.subTest(effort=effort):
+                requests = []
+
+                def handle(request):
+                    requests.append(json.loads(request.content))
+                    return httpx.Response(200, json={
+                        "id": "test", "object": "chat.completion", "created": 0, "model": "test-model",
+                        "choices": [{"index": 0, "finish_reason": "stop", "message": {
+                            "role": "assistant", "content": "History Summary: done.",
+                        }}],
+                    })
+
+                with patch("scripts.config.LLM_REASONING_EFFORT", effort), OpenAI(
+                    api_key="test-only", base_url="http://mock.invalid/v1", max_retries=0,
+                    http_client=httpx.Client(transport=httpx.MockTransport(handle)),
+                ) as client:
+                    agent = IrisAgent.__new__(IrisAgent)
+                    agent.client = client
+                    self.memory.client = client
+                    agent._call_llm_for_action([{"role": "user", "content": "test"}])
+                    self.memory.compress_memory([{"role": "assistant", "content": "old"}], "summarize")
+                self.assertEqual(len(requests), 2)
+                self.assertIn("tools", requests[0])
+                for request in requests:
+                    if effort == "omit":
+                        self.assertNotIn("reasoning_effort", request)
+                    else:
+                        self.assertEqual(request["reasoning_effort"], effort)
 
     def test_native_compression_preserves_whole_rounds_and_restores_them_on_failure(self):
         for fail in (False, True):

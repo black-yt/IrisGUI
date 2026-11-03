@@ -11,6 +11,31 @@ from unittest.mock import patch
 import scripts.config as config
 
 
+class ReasoningEffortConfigTests(unittest.TestCase):
+    def read_config(self, value):
+        return subprocess.run([
+            sys.executable, "-c",
+            "import json; from scripts.config import reasoning_request_kwargs, openai_client_kwargs; "
+            "assert 'reasoning_effort' not in openai_client_kwargs(); "
+            "print(json.dumps(reasoning_request_kwargs()))",
+        ], cwd=Path(__file__).resolve().parents[1],
+            env=dict(os.environ, LLM_REASONING_EFFORT=value), capture_output=True, text=True)
+
+    def test_default_normalization_and_supported_values(self):
+        for value in ("", "   ", "none", "minimal", "low", " MEDIUM ", "high", "xhigh", "max", "omit"):
+            with self.subTest(value=value):
+                result = self.read_config(value)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                normalized = value.strip().lower() or "low"
+                expected = {} if normalized == "omit" else {"reasoning_effort": normalized}
+                self.assertEqual(json.loads(result.stdout.splitlines()[-1]), expected)
+
+    def test_invalid_effort_fails_at_startup(self):
+        result = self.read_config("typo")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("LLM_REASONING_EFFORT must be one of", result.stderr)
+
+
 class ScreenshotHistoryConfigTests(unittest.TestCase):
     def read_config(self, **settings):
         environment = dict(os.environ, MEMORY_IMAGE_ROUNDS="", MEMORY_IMAGE_TOKEN_MULTIPLIER="")

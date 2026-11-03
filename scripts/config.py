@@ -37,6 +37,14 @@ LLM_API_KEY = os.getenv("LLM_API_KEY")
 LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME") or "gpt-6.1-sol"
 LLM_TIMEOUT_SECONDS = _get_float("LLM_TIMEOUT_SECONDS", 300.0)  # 0 uses the SDK's default timeout
 LLM_MAX_RETRIES = _get_int("LLM_MAX_RETRIES", 1)
+LLM_REASONING_EFFORT = _get_choice(
+    "LLM_REASONING_EFFORT", "low", ("none", "minimal", "low", "medium", "high", "xhigh", "max", "omit"),
+)
+
+
+def reasoning_request_kwargs():
+    """Chat Completions request parameters, separate from client configuration."""
+    return {} if LLM_REASONING_EFFORT == "omit" else {"reasoning_effort": LLM_REASONING_EFFORT}
 
 # ===========================
 # Vision Parameters

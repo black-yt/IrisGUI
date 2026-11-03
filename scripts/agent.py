@@ -141,6 +141,7 @@ class IrisAgent:
             tools=GUI_TOOL_SCHEMAS,
             tool_choice="auto",
             parallel_tool_calls=True,
+            **reasoning_request_kwargs(),
         )
 
     @staticmethod

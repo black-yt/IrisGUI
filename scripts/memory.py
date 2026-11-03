@@ -392,6 +392,7 @@ class HierarchicalMemory:
             messages=messages_for_summary,
             max_tokens=max_tokens,
             **tool_options,
+            **reasoning_request_kwargs(),
         )
         summary = None
         try:

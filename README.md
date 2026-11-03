@@ -133,9 +133,22 @@ LLM_API_KEY="sk-your-api-key-here"
 LLM_MODEL_NAME="gpt-6.1-sol"
 LLM_TIMEOUT_SECONDS=300
 LLM_MAX_RETRIES=1
+LLM_REASONING_EFFORT=low
 MEMORY_SHORT_TOKEN_BUDGET=256000
 MEMORY_LONG_TOKEN_BUDGET=256000
 ```
+
+`LLM_REASONING_EFFORT=low` is the default. It is sent as the Chat Completions API's
+`reasoning_effort` parameter for action requests, tool-repair retries, and short/long
+memory compression; it is not added to the prompt or passed to the client constructor.
+Use `low`, `medium`, `high`, `xhigh`, or `max` for
+[GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol).
+`none` and `minimal` are also accepted by the configuration for other models that
+support them. Supported values depend on the model and compatible API provider.
+Set `LLM_REASONING_EFFORT=omit` to leave the parameter out and use the server default;
+this does not disable thinking. Blank values use `low`. Invalid values fail at
+startup, and rejected parameters are not silently retried without the setting.
+Restart Iris after changing it; the value stays consistent throughout a run.
 
 ### 4. Run Iris
 ```bash
