@@ -229,6 +229,11 @@ class VisionPerceptor:
         try:
             # Capture screenshot
             screenshot = self._capture_screenshot()
+            if DEBUG_MODE:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                screenshot_file = f"screenshot_{timestamp}.png"
+                screenshot.save(os.path.join(self.debug_dir, screenshot_file))
+                self.last_capture_files = {"screenshot": screenshot_file}
 
             # Ensure mouse coordinates are within screenshot bounds.
             # This handles multi-monitor setups where mouse might be outside the primary screen.
@@ -278,14 +283,13 @@ class VisionPerceptor:
 
             # Debug archive
             if DEBUG_MODE:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
                 global_file = f"global_{timestamp}.png"
                 local_file = f"local_{timestamp}.png"
                 global_path = os.path.join(self.debug_dir, global_file)
                 local_path = os.path.join(self.debug_dir, local_file)
                 global_image.save(global_path)
                 local_image.save(local_path)
-                self.last_capture_files = {"global": global_file, "local": local_file}
+                self.last_capture_files.update({"global": global_file, "local": local_file})
 
             return global_image, local_image, full_coordinate_map, mouse_grid_id, nearest_global_grid_id
         finally:

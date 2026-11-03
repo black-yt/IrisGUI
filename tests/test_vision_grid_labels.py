@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -134,6 +136,30 @@ class VisionGridLabelTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "grid fail"):
                 perceptor.capture_state(0, 0)
 
+        self.assertEqual(events, ["pre", "post"])
+
+    def test_debug_retains_untouched_capture_even_when_grid_processing_fails(self):
+        screenshot = Image.new("RGB", (80, 60), color=(20, 40, 60))
+        screenshot.putpixel((17, 23), (255, 128, 0))
+        expected_pixels = screenshot.tobytes()
+        events = []
+        perceptor = tools.VisionPerceptor.__new__(tools.VisionPerceptor)
+        perceptor.pre_callback = lambda: events.append("pre")
+        perceptor.post_callback = lambda: events.append("post")
+        with tempfile.TemporaryDirectory() as directory, patch("scripts.tools.DEBUG_MODE", True), \
+                patch.object(perceptor, "_capture_screenshot", return_value=screenshot), \
+                patch.object(perceptor, "_draw_grid_with_labels", side_effect=RuntimeError("grid fail")):
+            perceptor.debug_dir = directory
+            with self.assertRaisesRegex(RuntimeError, "grid fail"):
+                perceptor.capture_state(17, 23)
+            files = list(Path(directory).glob("*.png"))
+            self.assertEqual(len(files), 1)
+            self.assertRegex(files[0].name, r"^screenshot_\d{8}_\d{6}_\d{6}\.png$")
+            self.assertEqual(perceptor.last_capture_files, {"screenshot": files[0].name})
+            with Image.open(files[0]) as archived:
+                self.assertEqual(archived.size, screenshot.size)
+                self.assertEqual(archived.mode, screenshot.mode)
+                self.assertEqual(archived.tobytes(), expected_pixels)
         self.assertEqual(events, ["pre", "post"])
 
     def test_capture_state_returns_local_mouse_id_and_nearest_global_id(self):

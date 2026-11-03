@@ -205,6 +205,12 @@ If compression fails or returns an empty summary, the original history is restor
 
 With `DEBUG_MODE=True`, every captured global/local pair is retained in
 `scripts/debug/screenshot/`, regardless of the upload window or later compression.
+The untouched screen capture is also saved there as `screenshot_YYYYMMDD_HHMMSS_ffffff.png`
+before drawing any cursor marks, grids, borders, or crops. Its timestamp matches
+that round's `global_...png` and `local_...png`, and its filename is recorded under
+`images.screenshot` in the debug log. This raw capture is archived locally; model
+requests continue to use the global/local pair. Even if image processing fails,
+the already captured raw screenshot remains on disk.
 `scripts/debug/log/*.jsonl` records step numbers, screenshot filenames, model replies
 (including repair attempts and memory summaries), tool calls, and execution results
 or errors. Model output entries also include the full SDK response, preserving

@@ -239,7 +239,7 @@ class DebugScreenshotIntegrationTests(unittest.TestCase):
             self.assertIn("action timeout", feedback[3])
             self.assertEqual([image_count(request) for request in requests], [2, 2, 4, 6, 8, 8])
             self.assertIn("action timeout", str(requests[-1]))
-            self.assertEqual(len(list(Path(agent.vision.debug_dir).glob("*.png"))), 10)
+            self.assertEqual(len(list(Path(agent.vision.debug_dir).glob("*.png"))), 15)
             entries = [json.loads(line) for line in Path(memory.debug_save_path).read_text(encoding="utf-8").splitlines()]
             outputs = [entry for entry in entries if entry.get("direction") == "output"]
             executions = [entry for entry in entries if entry.get("direction") == "execution"]
@@ -252,6 +252,15 @@ class DebugScreenshotIntegrationTests(unittest.TestCase):
             capture_inputs = [entry for entry in entries if entry.get("direction") == "input" and entry.get("images")]
             self.assertEqual([entry["step"] for entry in capture_inputs], [1, 2, 3, 4, 5])
             for entry, request in zip(capture_inputs, (requests[0], *requests[2:])):
+                raw_name = entry["images"]["screenshot"]
+                self.assertRegex(raw_name, r"^screenshot_\d{8}_\d{6}_\d{6}\.png$")
+                timestamp = raw_name.removeprefix("screenshot_")
+                self.assertEqual(entry["images"]["global"], "global_" + timestamp)
+                self.assertEqual(entry["images"]["local"], "local_" + timestamp)
+                with Image.open(Path(agent.vision.debug_dir) / raw_name) as raw:
+                    self.assertEqual(raw.size, (640, 480))
+                    self.assertEqual(raw.mode, "RGB")
+                    self.assertEqual(raw.tobytes(), Image.new("RGB", (640, 480)).tobytes())
                 for view, part in zip(("global", "local"), image_parts(request[-1])):
                     archived = (Path(agent.vision.debug_dir) / entry["images"][view]).read_bytes()
                     uploaded = base64.b64decode(part["image_url"]["url"].split(",", 1)[1])
