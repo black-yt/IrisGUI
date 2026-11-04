@@ -1,4 +1,5 @@
 import ctypes
+import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -7,6 +8,19 @@ from scripts import scrolling
 
 
 class WindowsWheelTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "Checks actual Windows ctypes function isolation")
+    def test_scroll_does_not_change_pyautogui_mouse_signature(self):
+        shared = scrolling.pyautogui.platformModule.ctypes.windll.user32.mouse_event
+        original_argtypes = shared.argtypes
+        try:
+            # Stop before any OS input is sent, after the DLL function setup.
+            with patch("scripts.scrolling.pyautogui.failSafeCheck", side_effect=RuntimeError("stop before input")):
+                with self.assertRaisesRegex(RuntimeError, "stop before input"):
+                    scrolling._send_windows_wheel(280, False)
+            self.assertIs(shared.argtypes, original_argtypes)
+        finally:
+            shared.argtypes = original_argtypes
+
     @patch("scripts.scrolling.sys.platform", "win32")
     @patch("scripts.scrolling.time.sleep")
     @patch("scripts.scrolling._send_windows_wheel")
@@ -54,8 +68,8 @@ class WindowsWheelTests(unittest.TestCase):
                                          (480000, False, 0x0800), (-480000, True, 0x1000)):
             with self.subTest(delta=delta, horizontal=horizontal):
                 mouse_event = Mock()
-                windll = SimpleNamespace(user32=SimpleNamespace(mouse_event=mouse_event))
-                with patch.object(scrolling.ctypes, "windll", windll, create=True):
+                user32 = SimpleNamespace(mouse_event=mouse_event)
+                with patch.object(scrolling.ctypes, "WinDLL", return_value=user32, create=True):
                     scrolling._send_windows_wheel(delta, horizontal)
                 chunks = []
                 for event in mouse_event.call_args_list:
@@ -72,8 +86,8 @@ class WindowsWheelTests(unittest.TestCase):
     @patch("scripts.scrolling.time.sleep")
     def test_larger_amount_sends_continuous_wheel_events(self, sleep, failsafe):
         mouse_event = Mock()
-        windll = SimpleNamespace(user32=SimpleNamespace(mouse_event=mouse_event))
-        with patch.object(scrolling.ctypes, "windll", windll, create=True):
+        user32 = SimpleNamespace(mouse_event=mouse_event)
+        with patch.object(scrolling.ctypes, "WinDLL", return_value=user32, create=True):
             self.assertEqual(scrolling.scroll_wheel("down", 3), 840)
         self.assertEqual(mouse_event.call_count, 7)
         for event in mouse_event.call_args_list:
@@ -85,8 +99,8 @@ class WindowsWheelTests(unittest.TestCase):
     @patch("scripts.scrolling.pyautogui.failSafeCheck", side_effect=RuntimeError("failsafe"))
     def test_native_scroll_respects_failsafe(self, failsafe):
         mouse_event = Mock()
-        windll = SimpleNamespace(user32=SimpleNamespace(mouse_event=mouse_event))
-        with patch.object(scrolling.ctypes, "windll", windll, create=True):
+        user32 = SimpleNamespace(mouse_event=mouse_event)
+        with patch.object(scrolling.ctypes, "WinDLL", return_value=user32, create=True):
             with self.assertRaisesRegex(RuntimeError, "failsafe"):
                 scrolling._send_windows_wheel(60, False)
         mouse_event.assert_not_called()

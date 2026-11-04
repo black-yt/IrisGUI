@@ -18,7 +18,9 @@ SCROLL_EVENT_INTERVAL_SECONDS = 0.01
 
 
 def _send_windows_wheel(delta, horizontal):
-    mouse_event = ctypes.windll.user32.mouse_event
+    # windll.user32 caches functions shared with PyAutoGUI. Give this call its
+    # own DLL wrapper so our argtypes cannot change PyAutoGUI's click ABI.
+    mouse_event = ctypes.WinDLL("user32", use_last_error=True).mouse_event
     mouse_event.argtypes = [ctypes.c_uint32] * 4 + [ctypes.c_size_t]
     mouse_event.restype = None
     flag = 0x1000 if horizontal else 0x0800  # HWHEEL / WHEEL
