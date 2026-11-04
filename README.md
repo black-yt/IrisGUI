@@ -35,11 +35,40 @@ Powered by a robust **ReAct (Reasoning + Acting)** loop, Iris can handle complex
 
 ## 🆕 Latest News
 
+🚩 **Update** (2026-11-04) **Continuous scrolling**: The `scroll` tool now accepts decimal amounts in `0 < amount <= 100` (default `1`), allowing fine adjustments or longer continuous scrolling in a single call.
+
+🚩 **Update** (2026-11-04) **Configurable reasoning effort**: Set `LLM_REASONING_EFFORT` through the environment, with `low` as the default, for both action requests and memory compression on compatible providers.
+
+🚩 **Update** (2026-11-04) **Action feedback and loop reminders**: Neutral system reminders flag repeated action patterns, while interaction feedback reminds the agent to verify the actual UI result in the next screenshot.
+
+🚩 **Update** (2026-11-03) **Continuous Global/Local coordinates**: Both grid views now accept fractional coordinates such as `L-10-10.32` and `G-01.10-08`, making small controls between grid lines easier to target.
+
+🚩 **Update** (2026-11-03) **Multi-round screenshot history**: Historical Global/Local screenshot pairs stay in their original conversation turns. Configure `MEMORY_IMAGE_ROUNDS`: `-1` keeps all available rounds, while `4` retains up to 8 images including the current pair.
+
+🚩 **Update** (2026-11-03) **Preserved native conversation history**: Assistant outputs, native tool calls, and matching tool results remain in the conversation. Concise per-step prompts let each ordinary turn continue the existing history without rewriting earlier text.
+
+<details>
+<summary>👉 More News (Click to expand)</summary>
+
+🚩 **Update** (2026-11-03) **Image-aware memory compression**: Compression thresholds now account for estimated image tokens alongside text and tool messages, and retained screenshots are included when summarizing visual history.
+
+🚩 **Update** (2026-11-03) **Complete debug artifacts**: Debug mode archives untouched screen captures alongside Global/Local views, full model responses, tool calls, and execution feedback for troubleshooting.
+
+🚩 **Update** (2026-11-03) **Configurable log window display**: Choose `normal`, `hidden`, or `secondary` with `LOG_WINDOW_MODE`. On Windows, the secondary-screen log window fits the monitor work area above the taskbar.
+
+🚩 **Update** (2026-11-03) **Longer-run defaults**: The default task limit is now 500 steps, the LLM timeout is 300 seconds, and short- and long-term memory budgets are each 256,000 estimated tokens.
+
+🚩 **Update** (2026-11-03) **UTF-8 terminal output**: Chinese text, emoji, and structured console output now work across Windows terminals, WSL-launched Windows Python, and redirected output without GBK encoding failures.
+
+🚩 **Update** (2026-11-03) **Updated default model**: The default model is now `gpt-6.1-sol`, configurable through `LLM_MODEL_NAME`.
+
 🚩 **Update** (2026-04-30) Iris now supports native user input requests during agent loops, with the model's question shown in the floating log and a reusable multi-line terminal input panel for immediate or delayed submission.
 
 🚩 **Update** (2026-04-29) Iris now supports OpenAI-compatible native tool calling, safe multi-tool GUI actions, a cross-platform terminal task launcher, structured loop output, traceable debug logs, and token-based memory compression.
 
 🚩 **Update** (2026-01-18) We release **Iris-v1.0**.
+
+</details>
 
 ---
 
