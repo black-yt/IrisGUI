@@ -44,7 +44,7 @@ class NativeToolSchemaTests(unittest.TestCase):
         amount = scroll["parameters"]["properties"]["amount"]
         self.assertEqual(amount["type"], "number")
         self.assertEqual(amount["exclusiveMinimum"], 0)
-        self.assertEqual(amount["maximum"], 1)
+        self.assertEqual(amount["maximum"], 100)
         self.assertEqual(amount["default"], 1)
         self.assertNotIn("enum", amount)
 

@@ -167,7 +167,7 @@ class ActionExecutorTests(unittest.TestCase):
     def test_scroll_sends_strength_once_in_each_direction(self, scroll, sleep):
         for direction, amount, units in (
             ("up", 0.5, 140),
-            ("down", 1, 280),
+            ("down", 100, 28000),
             ("left", 0.32, 90),
             ("right", 0.01, 3),
         ):
@@ -192,7 +192,7 @@ class ActionExecutorTests(unittest.TestCase):
     def test_scroll_rejects_invalid_amounts_and_directions_without_input(self, scroll, hscroll, native, sleep):
         invalid_actions = [
             {"direction": "up", "amount": amount}
-            for amount in (None, 0, -1, 1.01, "0.5", "page", True, float("nan"), float("inf"))
+            for amount in (None, 0, -1, 100.01, "0.5", "page", True, float("nan"), float("inf"))
         ] + [
             {"direction": "diagonal", "amount": 1},
             {"amount": 1},

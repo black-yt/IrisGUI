@@ -106,7 +106,8 @@ GUI_ACTION_TOOLS = [
         action_type="scroll",
         description=(
             "Scroll at the current pointer position. Direction is required. Optional amount controls "
-            "strength in (0, 1], default 1. Use smaller values for finer adjustments. "
+            "amount in (0, 100], default 1. Use decimals below 1 for finer adjustments and values "
+            "above 1 for longer continuous scrolling in one call. "
             "Visual distance depends on the application."
         ),
         parameters={
@@ -120,11 +121,12 @@ GUI_ACTION_TOOLS = [
                 "amount": {
                     "type": "number",
                     "exclusiveMinimum": 0,
-                    "maximum": 1,
+                    "maximum": 100,
                     "default": 1,
                     "description": (
-                        "Scroll strength greater than 0 and at most 1. Defaults to 1, the largest "
-                        "scroll per call. Smaller decimals such as 0.32 or 0.1 give finer adjustments."
+                        "Scroll amount greater than 0 and at most 100. Defaults to 1. "
+                        "Decimals such as 0.32 give finer adjustments; values such as 3, 10 or 100 "
+                        "give increasingly longer continuous scrolling in a single call."
                     ),
                 },
             },

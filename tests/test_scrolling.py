@@ -20,6 +20,9 @@ class WindowsWheelTests(unittest.TestCase):
             ("up", 0.1625, 46, False),
             ("up", 5e-324, 1, False),
             ("up", 0.1234567890123456, 35, False),
+            ("down", 3, -840, False),
+            ("right", 1.5, 420, True),
+            ("up", 100, 28000, False),
         ):
             with self.subTest(direction=direction, amount=amount):
                 send.reset_mock()
@@ -37,14 +40,15 @@ class WindowsWheelTests(unittest.TestCase):
 
     @patch("scripts.scrolling._send_windows_wheel")
     def test_invalid_strength_never_sends_input(self, send):
-        for amount in (0, -0.01, 1.00001, True, None, "0.32", float("nan"), float("inf")):
+        for amount in (0, -0.01, 100.00001, True, None, "0.32", float("nan"), float("inf")):
             with self.subTest(amount=amount):
                 with self.assertRaises(ValueError):
                     scrolling.scroll_wheel("up", amount)
         send.assert_not_called()
 
     @patch("scripts.scrolling.pyautogui.failSafeCheck")
-    def test_native_events_preserve_axis_sign_and_large_totals(self, failsafe):
+    @patch("scripts.scrolling.time.sleep")
+    def test_native_events_preserve_axis_sign_and_large_totals(self, sleep, failsafe):
         for delta, horizontal, flag in ((60, False, 0x0800), (-150, False, 0x0800),
                                          (-12, True, 0x1000), (300, True, 0x1000),
                                          (480000, False, 0x0800), (-480000, True, 0x1000)):
@@ -62,6 +66,21 @@ class WindowsWheelTests(unittest.TestCase):
                     self.assertEqual(part > 0, delta > 0)
                     chunks.append(part)
                 self.assertEqual(sum(chunks), delta)
+
+    @patch("scripts.scrolling.sys.platform", "win32")
+    @patch("scripts.scrolling.pyautogui.failSafeCheck")
+    @patch("scripts.scrolling.time.sleep")
+    def test_larger_amount_sends_continuous_wheel_events(self, sleep, failsafe):
+        mouse_event = Mock()
+        windll = SimpleNamespace(user32=SimpleNamespace(mouse_event=mouse_event))
+        with patch.object(scrolling.ctypes, "windll", windll, create=True):
+            self.assertEqual(scrolling.scroll_wheel("down", 3), 840)
+        self.assertEqual(mouse_event.call_count, 7)
+        for event in mouse_event.call_args_list:
+            self.assertEqual(event.args, (0x0800, 0, 0, ctypes.c_uint32(-120).value, 0))
+        self.assertEqual(sleep.call_count, 7)  # Six intervals, one final pause.
+        self.assertEqual([item.args[0] for item in sleep.call_args_list[:-1]], [0.01] * 6)
+        self.assertEqual(sleep.call_args_list[-1].args, (scrolling.pyautogui.PAUSE,))
 
     @patch("scripts.scrolling.pyautogui.failSafeCheck", side_effect=RuntimeError("failsafe"))
     def test_native_scroll_respects_failsafe(self, failsafe):

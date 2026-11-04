@@ -84,9 +84,9 @@ Keyboard actions affect only the currently focused application or control. Mouse
 
 ## Scrolling
 Call `scroll` with required `direction`: `up`, `down`, `left`, or `right`.
-Optional `amount` controls scroll strength: 0 < amount <= 1, default 1. Decimals are supported. Use 1 for the largest scroll per call and smaller values for finer adjustments.
-For example, `scroll(direction="up")` uses the default strength; `scroll(direction="down", amount=0.32)` uses a smaller strength.
-Use one call with the desired strength when no intermediate check is needed. Multiple calls may be grouped in one response when the task requires more total scrolling and no intermediate screenshot is needed.
+Optional `amount` controls scrolling: 0 < amount <= 100, default 1. Decimals are supported. Values below 1 give finer adjustments; values above 1 give longer continuous scrolling. The maximum per call is 100.
+For example, `scroll(direction="up")` uses the default amount; `scroll(direction="down", amount=0.32)` gives a fine adjustment; `scroll(direction="up", amount=10)` performs a longer continuous scroll.
+When continuous scrolling does not require intermediate checks, use one call with a larger amount instead of many separate calls or turns. If the task requests three default scrolls, use `amount=3`; for the maximum scroll, use `amount=100`.
 Verify the pointer is inside the intended view before scrolling. The visible effect depends on the application; inspect the next screenshot before deciding whether to scroll further.
 
 ## Multi-Tool Policy
