@@ -298,9 +298,14 @@ class VisionPerceptor:
 
 
 class ActionExecutor:
+    INTERACTION_REMINDER = "Execution confirms the input event only. Check the next screenshot to verify its effect."
+    LOOP_REMINDER = "System reminder (informational): A recent action pattern repeated. This may be expected. Ignore this reminder if the repetition is intentional."
+    INTERACTION_ACTIONS = {"click", "double_click", "mouse_down", "mouse_up", "scroll", "type", "hotkey"}
+
     def __init__(self, pre_callback=None, post_callback=None):
         self.pre_callback = pre_callback
         self.post_callback = post_callback
+        self._recent_actions = []
         # Initialize mouse position
         try:
             self.mouse_x, self.mouse_y = pyautogui.position()
@@ -343,12 +348,56 @@ class ActionExecutor:
         if self.pre_callback and not is_user_input:
             self.pre_callback()
         try:
-            return self._execute_action(action_dict, coordinate_map, log_callback=log_callback)
+            start = (self.mouse_x, self.mouse_y)
+            feedback = self._execute_action(action_dict, coordinate_map, log_callback=log_callback)
+            if feedback.startswith("Action ") and feedback.endswith(" executed."):
+                if action_type in self.INTERACTION_ACTIONS:
+                    feedback += " " + self.INTERACTION_REMINDER
+                if self._repeats_recent_action(action_dict, start):
+                    feedback += "\n" + self.LOOP_REMINDER
+            elif action_type != "wait":
+                self._recent_actions.clear()
+            return feedback
         finally:
             if self.post_callback and not is_user_input:
                 self.post_callback()
             if ACTION_SETTLE_SECONDS > 0 and action_type not in {"wait", "ask_input"}:
                 time.sleep(ACTION_SETTLE_SECONDS)
+
+    def _repeats_recent_action(self, action, start):
+        kind = action["action_type"]
+        if kind not in self.INTERACTION_ACTIONS and kind != "move":
+            return False
+
+        end = (self.mouse_x, self.mouse_y)
+        if kind == "move":
+            signature = ("move", end)
+        else:
+            position = None if kind in {"type", "hotkey"} else end
+            signature = (kind, position, action.copy())
+
+        history = self._recent_actions
+        previous = history[-1] if history else None
+        history.append((signature, start))
+        del history[:-8]
+
+        # Resolve local coordinates before comparing the two legs of a reversal.
+        if kind == "move" and previous and previous[0][0] == "move":
+            previous_end = previous[0][1]
+            previous_start = previous[1]
+            if (math.dist(previous_end, start) <= 5
+                    and math.dist(previous_start, end) <= 5
+                    and math.dist(start, end) > 5):
+                return True
+
+        signatures = [entry[0] for entry in history]
+        if len(signatures) >= 3 and signatures[-3:] == [signature] * 3:
+            return True
+        return any(
+            len(signatures) >= 2 * length
+            and signatures[-2 * length:-length] == signatures[-length:]
+            for length in (2, 3, 4)
+        )
 
     def _execute_action(self, action_dict, coordinate_map=None, log_callback=None):
         action_type = action_dict.get("action_type")

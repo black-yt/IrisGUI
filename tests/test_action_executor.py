@@ -40,7 +40,31 @@ class ActionExecutorTests(unittest.TestCase):
         executor.post_callback = lambda: events.append("post")
         executor.mouse_x = 0
         executor.mouse_y = 0
+        executor._recent_actions = []
         return executor, events
+
+    @patch("scripts.tools.time.sleep")
+    @patch("scripts.tools.pyautogui.moveTo")
+    def test_resolved_mouse_reversal_reports_reminder_and_executes_move(self, move, sleep):
+        executor, _ = self.make_executor()
+        executor.mouse_x, executor.mouse_y = 15, 370
+        first = executor.execute({"action_type": "move", "point_id": "L-10-11"}, {"L-10-11": (15, 390)})
+        second = executor.execute({"action_type": "move", "point_id": "L-10-09"}, {"L-10-09": (15, 370)})
+        self.assertNotIn(tools.ActionExecutor.LOOP_REMINDER, first)
+        self.assertIn(tools.ActionExecutor.LOOP_REMINDER, second)
+        self.assertEqual(move.call_count, 2)
+
+    @patch("scripts.tools.time.sleep")
+    @patch("scripts.tools.pyautogui.hotkey")
+    def test_repeated_hotkey_sequence_reports_reminder(self, hotkey, sleep):
+        executor, _ = self.make_executor()
+        for key in ("left", "right", "left"):
+            feedback = executor.execute({"action_type": "hotkey", "keys": [key]})
+            self.assertNotIn(tools.ActionExecutor.LOOP_REMINDER, feedback)
+        feedback = executor.execute({"action_type": "hotkey", "keys": ["right"]})
+        self.assertIn(tools.ActionExecutor.LOOP_REMINDER, feedback)
+        self.assertIn(tools.ActionExecutor.INTERACTION_REMINDER, feedback)
+        self.assertEqual(hotkey.call_count, 4)
 
     @patch("scripts.tools.pyautogui.position", side_effect=FileNotFoundError(2, "No such file or directory"))
     def test_initial_mouse_position_failure_falls_back_to_origin(self, position):
@@ -122,7 +146,7 @@ class ActionExecutorTests(unittest.TestCase):
 
         result = executor.execute({"action_type": "type", "text": "hello"})
 
-        self.assertEqual(result, "Action type 'hello' executed.")
+        self.assertEqual(result, "Action type 'hello' executed. " + tools.ActionExecutor.INTERACTION_REMINDER)
         write.assert_called_once_with("hello", interval=tools.TYPE_INTERVAL_SECONDS)
         self.assertEqual(events, ["pre", "post"])
 
@@ -136,7 +160,7 @@ class ActionExecutorTests(unittest.TestCase):
 
         result = executor.execute({"action_type": "type", "text": "x" * 40})
 
-        self.assertEqual(result, f"Action type '{'x' * 40}' executed.")
+        self.assertEqual(result, f"Action type '{'x' * 40}' executed. " + tools.ActionExecutor.INTERACTION_REMINDER)
         write.assert_not_called()
         hotkey.assert_called_once_with("ctrl", "v")
         self.assertEqual(copy.call_args_list, [call("x" * 40), call("old clipboard")])
@@ -148,7 +172,7 @@ class ActionExecutorTests(unittest.TestCase):
 
         result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "half"})
 
-        self.assertEqual(result, "Action scroll down half executed.")
+        self.assertEqual(result, "Action scroll down half executed. " + tools.ActionExecutor.INTERACTION_REMINDER)
         scroll.assert_called_once_with(-tools.SCROLL_HALF_CLICKS)
 
     @patch("scripts.tools.time.sleep")
