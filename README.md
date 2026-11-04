@@ -201,94 +201,45 @@ This window-local shortcut is separate from the global triple-ESC emergency stop
 
 ### Log Window Display Mode
 
-Set `LOG_WINDOW_MODE` in `.env` and restart Iris:
+Set `LOG_WINDOW_MODE` in `.env`:
 
 | Value | Behavior |
 | --- | --- |
-| `normal` (default) | Show the floating log on the primary screen; hide it during screenshots and GUI actions, then restore it. |
-| `hidden` | Keep the floating log hidden throughout the task, including errors and task completion. Terminal logs and global triple-ESC still work. |
-| `secondary` | Show the log flush against the left edge of the first non-primary monitor's usable work area, spanning from its top to just above the Windows taskbar. It stays visible during primary-screen screenshots and actions. |
+| `normal` (default) | Show on the primary screen; hide during screenshots and GUI actions. |
+| `hidden` | Hide the floating log. Terminal logs and triple-ESC still work. |
+| `secondary` | Stay visible at the first secondary monitor's left edge, filling its usable height above the taskbar. |
 
-For example, `LOG_WINDOW_MODE=secondary`. If no separate secondary screen is
-available, or monitor/work-area detection fails, this mode reports a warning and
-falls back to `normal`. Mirrored displays are treated as a single usable screen.
-Secondary monitors to the left of or above the primary screen are supported.
-Windows' per-monitor work area keeps taskbars on any edge clear; other platforms
-use the full monitor bounds. This setting only controls the floating log; it does
-not move or expand the agent's screenshot or input coordinate area to another monitor.
+`secondary` falls back to `normal` if no usable second monitor is available.
+Screenshots and GUI actions remain on the primary screen. Restart Iris after changing the setting.
 
 ### Screenshot History and Debug Archives
 
-Per-step prompts contain only the current mouse-grid state and a short request to
-assess the screen and choose the next action. Shared image, coordinate and tool
-rules stay in the fixed system prompt. Historical observation text and tool-repair
-messages are retained verbatim; each new round appends to the previous request
-prefix. Image-window pruning and memory compression still update history according
-to their settings. With all images retained and no compression, the complete
-previous request's message prefix stays unchanged, including during repair retries.
-Native tools are also passed through the API's `tools` parameter on every action
-request, with stable schemas and ordering. Each model response is appended as its
-original assistant message, retaining content, `tool_calls`, arguments, IDs, and
-provider-specific reasoning/signature fields. Every executed or skipped call gets
-a matching `role: tool` result with its `tool_call_id`; history is not rebuilt as
-plain-text tool summaries. Compression retains complete rounds so tool calls and
-their results cannot be split. Token estimation also counts native call arguments
-and other message fields.
+Each round appends observations, original model replies, and native tool results to
+history. Retained global/local screenshot pairs stay in their original rounds.
 
-```ini
-MEMORY_IMAGE_ROUNDS=-1
-MEMORY_IMAGE_TOKEN_MULTIPLIER=1.2
-DEBUG_MODE=False
-```
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `MEMORY_IMAGE_ROUNDS` | `-1` | Keep all uncompressed screenshot rounds. `4` keeps the current round plus three earlier rounds (up to eight images); `1` keeps only the current pair. |
+| `MEMORY_IMAGE_TOKEN_MULTIPLIER` | `1.2` | Adjust image-token estimates used for memory compression. |
+| `DEBUG_MODE` | `False` | Save raw and annotated screenshots, model responses, and tool execution logs locally. |
 
-`MEMORY_IMAGE_ROUNDS` includes the current observation: `-1` (default) keeps all
-uncompressed screenshot rounds, `4` sends up to eight images (current round plus
-three preceding rounds), and `1` sends only the current pair. Zero and values below
-`-1` are invalid. Each round's global/local pair stays in that round's original
-user message, before the corresponding assistant action and execution result.
-Older text remains when the image window expires. Historical local grids are for
-comparison; the next action must use the newest observation's grid.
+Use `-1` or a positive integer for the image window; older text remains when images
+expire. Compression defaults to **256000 estimated tokens**, including text,
+images, and tool calls. The summary model receives old screenshots, and tool calls
+stay grouped with their results.
 
-The 256000-token compression threshold now includes fixed prompts, summaries,
-history text, and both current and historical images. Image tokens are estimated
-from PNG dimensions using 32×32 patches times `MEMORY_IMAGE_TOKEN_MULTIPLIER`,
-rounded up per image. This is a conservative estimate without server-side image
-downscaling, based on the [OpenAI vision guide](https://developers.openai.com/api/docs/guides/images-vision).
-It is not exact billing for every model or compatible provider; adjust the
-multiplier if needed. Base64 characters are never counted as text tokens.
-Compression runs before sending the next action request and retains the configured
-recent complete rounds. The summary model receives old screenshots alongside
-their original text/actions before those rounds are replaced by a text summary.
-If compression fails or returns an empty summary, the original history is restored.
-
-With `DEBUG_MODE=True`, every captured global/local pair is retained in
-`scripts/debug/screenshot/`, regardless of the upload window or later compression.
-The untouched screen capture is also saved there as `screenshot_YYYYMMDD_HHMMSS_ffffff.png`
-before drawing any cursor marks, grids, borders, or crops. Its timestamp matches
-that round's `global_...png` and `local_...png`, and its filename is recorded under
-`images.screenshot` in the debug log. This raw capture is archived locally; model
-requests continue to use the global/local pair. Even if image processing fails,
-the already captured raw screenshot remains on disk.
-`scripts/debug/log/*.jsonl` records step numbers, screenshot filenames, model replies
-(including repair attempts and memory summaries), tool calls, and execution results
-or errors. Model output entries also include the full SDK response, preserving
-tool IDs, finish reasons, usage, and any additional response fields returned by the
-provider. Archives stay local and are ignored by Git. Restart Iris after changing
-these settings.
+Debug files are saved under `scripts/debug/screenshot/` and `scripts/debug/log/`.
+They include untouched `screenshot_*.png` captures, global/local pairs, and JSONL
+logs with full model responses, tool calls, results, and errors. Archives are
+unaffected by the upload window or compression and are ignored by Git. Restart
+Iris after changing these settings.
 
 ### Precise Pointer Placement
 
-The `move` tool accepts continuous grid coordinates in both views. Either index can
-be a decimal, and the original integer IDs still work:
-
-* `L-10-10.32`: column 10, row 10.32 (0.32 local grid intervals below row 10).
-* `G-01.10-08`: column 1.10, row 8 (0.10 global grid intervals right of column 1).
-* `L-09.75-10.25`: both indices are fractional.
-
-Fractions refer to grid spacing, not pixel offsets. Coordinates are resolved using
-the latest view's actual anchor, crop and spacing, then rounded to the nearest
-screen pixel. Positions outside that view are rejected. Local coordinates must
-be recalculated after each move because the Local View follows the cursor.
+`move` accepts integer or fractional grid IDs in both views, such as
+`L-10-10.32` and `G-01.10-08`. Fractions refer to grid intervals, not pixels.
+Use the newest screenshot's grid; local coordinates change after each move because
+the Local View follows the cursor. Out-of-view positions are rejected.
 
 ---
 
@@ -309,11 +260,5 @@ Coming soon...
 ```
 
 --- -->
-
-## 🌟 Star History
-
-If you find this work helpful, please consider to **star⭐** this [repo](https://github.com/black-yt/IrisGUI). Thanks for your support! 🤩
-
-[![black-yt/IrisGUI Stargazers](https://reporoster.com/stars/black-yt/IrisGUI)](https://github.com/black-yt/IrisGUI/stargazers)
 
 <p align="right"><a href="#top">🔝Back to top</a></p>
