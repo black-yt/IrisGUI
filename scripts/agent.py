@@ -82,6 +82,13 @@ Keyboard actions affect only the currently focused application or control. Mouse
 - You may group a focus click followed by a hotkey only when the click target is visually verified, stable, and the hotkey does not depend on any UI loading or focus-dependent visual change.
 - For browser shortcuts such as `ctrl+l`, make sure the browser window is focused first; otherwise the shortcut may be sent to the wrong application.
 
+## Scrolling
+Call `scroll` with required `direction`: `up`, `down`, `left`, or `right`.
+Optional `amount` controls scroll strength: 0 < amount <= 1, default 1. Decimals are supported. Use 1 for the largest scroll per call and smaller values for finer adjustments.
+For example, `scroll(direction="up")` uses the default strength; `scroll(direction="down", amount=0.32)` uses a smaller strength.
+Use one call with the desired strength when no intermediate check is needed. Multiple calls may be grouped in one response when the task requires more total scrolling and no intermediate screenshot is needed.
+Verify the pointer is inside the intended view before scrolling. The visible effect depends on the application; inspect the next screenshot before deciding whether to scroll further.
+
 ## Multi-Tool Policy
 A single step may contain multiple native tool calls only when they are safe to execute without a fresh screenshot.
 

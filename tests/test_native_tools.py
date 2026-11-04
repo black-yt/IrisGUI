@@ -37,6 +37,17 @@ class NativeToolSchemaTests(unittest.TestCase):
         self.assertIn("focus is already verified", hotkey_schema["function"]["description"])
         self.assertIn("currently focused target", hotkey_schema["function"]["description"])
 
+    def test_scroll_schema_accepts_optional_normalized_strength(self):
+        scroll = next(schema["function"] for schema in GUI_TOOL_SCHEMAS
+                      if schema["function"]["name"] == "scroll")
+        self.assertEqual(scroll["parameters"]["required"], ["direction"])
+        amount = scroll["parameters"]["properties"]["amount"]
+        self.assertEqual(amount["type"], "number")
+        self.assertEqual(amount["exclusiveMinimum"], 0)
+        self.assertEqual(amount["maximum"], 1)
+        self.assertEqual(amount["default"], 1)
+        self.assertNotIn("enum", amount)
+
     def test_ask_input_schema_requires_question_and_is_called_alone(self):
         ask_schema = next(schema for schema in GUI_TOOL_SCHEMAS if schema["function"]["name"] == "ask_input")
 
@@ -66,6 +77,26 @@ class NativeToolArgumentTests(unittest.TestCase):
 
 
 class NativeToolCallConversionTests(unittest.TestCase):
+    def test_scroll_total_is_preserved_as_one_action(self):
+        tool_call = {
+            "id": "call_scroll",
+            "type": "function",
+            "function": {"name": "scroll", "arguments": json.dumps({"direction": "up", "amount": 1})},
+        }
+        pairs = tool_calls_to_actions([tool_call])
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0][0], {"action_type": "scroll", "direction": "up", "amount": 1})
+
+    def test_fractional_scroll_is_preserved_in_action_and_transcript(self):
+        tool_call = {
+            "id": "call_fractional_scroll",
+            "type": "function",
+            "function": {"name": "scroll", "arguments": '{"direction":"up","amount":0.5}'},
+        }
+        action, normalized = tool_call_to_action(tool_call)
+        self.assertEqual(action["amount"], 0.5)
+        self.assertEqual(normalized["function"]["arguments"], tool_call["function"]["arguments"])
+
     def test_dict_tool_call_converts_to_executor_action(self):
         tool_call = {
             "id": "call_move",

@@ -6,6 +6,7 @@ from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
 from scripts.config import *
 from scripts.grid_coordinates import GridCoordinateMap, GridTransform
+from scripts.scrolling import scroll_wheel
 from scripts.terminal_input import prompt_for_user_input
 from scripts.utils import DISPLAY_BOX_WIDTH, colorize_terminal, format_status_box
 import pyautogui
@@ -447,20 +448,13 @@ class ActionExecutor:
                 return f"Action mouse_up ({button}) executed."
 
             elif action_type == "scroll":
-                direction = action_dict.get("direction", "down")
-                amount_str = action_dict.get("amount", "line")
-                clicks = self._scroll_clicks(amount_str)
-                
-                if direction == "up":
-                    pyautogui.scroll(clicks)
-                elif direction == "down":
-                    pyautogui.scroll(-clicks)
-                elif direction == "left":
-                    pyautogui.hscroll(-clicks)
-                elif direction == "right":
-                    pyautogui.hscroll(clicks)
-                
-                return f"Action scroll {direction} {amount_str} executed."
+                direction = action_dict.get("direction")
+                amount = action_dict.get("amount", 1)
+                try:
+                    scroll_wheel(direction, amount)
+                except ValueError as error:
+                    return f"Error: {error}."
+                return f"Action scroll {direction} amount={amount} executed."
 
             elif action_type == "type":
                 text = action_dict.get("text", "")
@@ -498,15 +492,6 @@ class ActionExecutor:
         except Exception as e:
             result = f"Error executing action {action_type}: {str(e)}"
         return result
-
-    def _scroll_clicks(self, amount):
-        if amount == "line":
-            return SCROLL_LINE_CLICKS
-        if amount == "half":
-            return SCROLL_HALF_CLICKS
-        if amount == "page":
-            return SCROLL_PAGE_CLICKS
-        return SCROLL_LINE_CLICKS
 
     def _type_text(self, text):
         if not text:
@@ -627,13 +612,7 @@ if __name__ == "__main__":
         print("Testing scroll...")
         executor.execute({"action_type": "move", "point_id": "L-00-00"}, mock_map)
         executor.execute({'action_type': 'click', 'button': 'left', 'repeat': 1}, mock_map)
-        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "page"}, mock_map)
-        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "page"}, mock_map)
-        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "page"}, mock_map)
-        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "page"}, mock_map)
-        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "page"}, mock_map)
-        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "page"}, mock_map)
-        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "page"}, mock_map)
+        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": 1}, mock_map)
         print(result)
 
         # Test hotkey

@@ -104,7 +104,11 @@ GUI_ACTION_TOOLS = [
     NativeToolSpec(
         name="scroll",
         action_type="scroll",
-        description="Scroll the current UI when the active view or pointer location is appropriate for scrolling.",
+        description=(
+            "Scroll at the current pointer position. Direction is required. Optional amount controls "
+            "strength in (0, 1], default 1. Use smaller values for finer adjustments. "
+            "Visual distance depends on the application."
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -114,12 +118,17 @@ GUI_ACTION_TOOLS = [
                     "description": "Scroll direction.",
                 },
                 "amount": {
-                    "type": "string",
-                    "enum": ["line", "half", "page"],
-                    "description": "Scroll amount.",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1,
+                    "default": 1,
+                    "description": (
+                        "Scroll strength greater than 0 and at most 1. Defaults to 1, the largest "
+                        "scroll per call. Smaller decimals such as 0.32 or 0.1 give finer adjustments."
+                    ),
                 },
             },
-            "required": ["direction", "amount"],
+            "required": ["direction"],
         },
     ),
     NativeToolSpec(

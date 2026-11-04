@@ -20,9 +20,6 @@ os.environ.setdefault("DEBUG_MODE", "False")
 os.environ.setdefault("ACTION_SETTLE_SECONDS", "0.2")
 os.environ.setdefault("TYPE_INTERVAL_SECONDS", "0.01")
 os.environ.setdefault("CLIPBOARD_TEXT_THRESHOLD", "30")
-os.environ.setdefault("SCROLL_LINE_CLICKS", "100")
-os.environ.setdefault("SCROLL_HALF_CLICKS", "200")
-os.environ.setdefault("SCROLL_PAGE_CLICKS", "400")
 os.environ.setdefault("MEMORY_SHORT_TOKEN_BUDGET", "128000")
 os.environ.setdefault("MEMORY_LONG_TOKEN_BUDGET", "128000")
 os.environ.setdefault("MEMORY_RECENT_INTERACTIONS_TO_KEEP", "3")
@@ -166,14 +163,59 @@ class ActionExecutorTests(unittest.TestCase):
         self.assertEqual(copy.call_args_list, [call("x" * 40), call("old clipboard")])
 
     @patch("scripts.tools.time.sleep")
+    @patch("scripts.tools.scroll_wheel")
+    def test_scroll_sends_strength_once_in_each_direction(self, scroll, sleep):
+        for direction, amount, units in (
+            ("up", 0.5, 140),
+            ("down", 1, 280),
+            ("left", 0.32, 90),
+            ("right", 0.01, 3),
+        ):
+            with self.subTest(direction=direction, amount=amount):
+                executor, events = self.make_executor()
+                scroll.reset_mock()
+                scroll.return_value = units
+                sleep.reset_mock()
+
+                result = executor.execute({"action_type": "scroll", "direction": direction, "amount": amount})
+
+                self.assertEqual(result, f"Action scroll {direction} amount={amount} executed. "
+                                 + tools.ActionExecutor.INTERACTION_REMINDER)
+                scroll.assert_called_once_with(direction, amount)
+                sleep.assert_called_once_with(tools.ACTION_SETTLE_SECONDS)
+                self.assertEqual(events, ["pre", "post"])
+
+    @patch("scripts.tools.time.sleep")
+    @patch("scripts.scrolling._send_windows_wheel")
+    @patch("scripts.tools.pyautogui.hscroll")
     @patch("scripts.tools.pyautogui.scroll")
-    def test_scroll_uses_configured_click_counts(self, scroll, sleep):
+    def test_scroll_rejects_invalid_amounts_and_directions_without_input(self, scroll, hscroll, native, sleep):
+        invalid_actions = [
+            {"direction": "up", "amount": amount}
+            for amount in (None, 0, -1, 1.01, "0.5", "page", True, float("nan"), float("inf"))
+        ] + [
+            {"direction": "diagonal", "amount": 1},
+            {"amount": 1},
+        ]
+        for action in invalid_actions:
+            with self.subTest(action=action):
+                executor, _ = self.make_executor()
+                result = executor.execute({"action_type": "scroll", **action})
+                self.assertTrue(result.startswith("Error: scroll"), result)
+                self.assertNotIn(tools.ActionExecutor.INTERACTION_REMINDER, result)
+                self.assertEqual(executor._recent_actions, [])
+        scroll.assert_not_called()
+        hscroll.assert_not_called()
+        native.assert_not_called()
+
+    @patch("scripts.tools.time.sleep")
+    @patch("scripts.tools.scroll_wheel", return_value=280)
+    def test_scroll_omitted_strength_defaults_to_one(self, scroll, sleep):
         executor, _ = self.make_executor()
-
-        result = executor.execute({"action_type": "scroll", "direction": "down", "amount": "half"})
-
-        self.assertEqual(result, "Action scroll down half executed. " + tools.ActionExecutor.INTERACTION_REMINDER)
-        scroll.assert_called_once_with(-tools.SCROLL_HALF_CLICKS)
+        result = executor.execute({"action_type": "scroll", "direction": "up"})
+        scroll.assert_called_once_with("up", 1)
+        self.assertIn("amount=1 executed.", result)
+        self.assertIn(tools.ActionExecutor.INTERACTION_REMINDER, result)
 
     @patch("scripts.tools.time.sleep")
     @patch("scripts.tools.prompt_for_user_input", return_value=SimpleNamespace(text="personal account\nuse profile 2", delay_seconds=2.5))
